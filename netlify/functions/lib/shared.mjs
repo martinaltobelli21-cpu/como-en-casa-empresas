@@ -142,7 +142,8 @@ export function nextWeek(todayISO) {
 }
 
 export const companies = () => getStore("companies");
-export const employees = () => getStore("employees");
+// Registration and sign-in immediately read the session token they just saved.
+export const employees = () => getStore({ name: "employees", consistency: "strong" });
 export const choicesStore = () => getStore("choices");
 export const surveys = () => getStore("surveys");
 
