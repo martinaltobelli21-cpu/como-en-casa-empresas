@@ -25,6 +25,28 @@ import {
 
 export const config = { path: "/api/*" };
 
+// Cierre: sábado 14:00 (ART) anterior al lunes de la semana elegida.
+function weekStatus(week) {
+  const monday = new Date(`${week.key}T00:00:00Z`);
+  monday.setUTCDate(monday.getUTCDate() - 2);
+  const deadline = `${monday.toISOString().slice(0, 10)}T14:00:00-03:00`;
+  return { deadline, locked: Date.now() >= Date.parse(deadline) };
+}
+
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const DAY_NAMES = { mon: "Lunes", tue: "Martes", wed: "Miércoles", thu: "Jueves", fri: "Viernes", sat: "Sábado" };
+
+function orderEmailHtml(employee, week, choices) {
+  const dayMenus = MENU_CYCLE[week.cycle];
+  const rows = week.days.map((day) => {
+    const menu = choices[day.key];
+    const meta = CATEGORY_META.find((m) => m.id === menu);
+    const dish = menu === "ninguno" ? "Sin vianda" : meta ? `${meta.emoji} ${meta.name} · ${esc(dayMenus?.[day.key]?.[menu] || "")}` : "Sin elegir (queda Equilibrado al cierre)";
+    return `<tr><td style="padding:8px 10px;border-bottom:1px solid #eadfc8;font-weight:bold;color:#40301f">${DAY_NAMES[day.key]} ${day.iso.slice(8)}</td><td style="padding:8px 10px;border-bottom:1px solid #eadfc8;color:#40301f">${dish}</td></tr>`;
+  }).join("");
+  return `Hola ${esc(employee.name.split(" ")[0])}, este es tu pedido para la ${esc(week.label)}:<br><br><table style="border-collapse:collapse;width:100%;background:#fff9ee;border-radius:12px">${rows}</table><br>Podés modificarlo desde la app hasta el sábado a las 14:00.`;
+}
+
 const MENU_IDS = new Set([...CATEGORY_META.map((m) => m.id), "ninguno"]);
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const SESSION_ERROR = "Tu sesión venció. Ingresá de nuevo con tu email y PIN.";
@@ -247,6 +269,8 @@ export default async (req) => {
       choices: saved?.choices || {},
       lastWeek: { key: lastWeekKey, dishes: eaten },
       surveyDone: Boolean(savedSurvey),
+      submittedAt: saved?.updatedAt || null,
+      ...weekStatus(week),
     });
   }
 
@@ -257,17 +281,32 @@ export default async (req) => {
     if (!employee) return json(401, { error: SESSION_ERROR });
     if (!hasPush(employee, pushEndpoint)) return json(403, { error: PUSH_ERROR });
     if (!week || !/^\d{4}-\d{2}-\d{2}$/.test(String(week))) return json(400, { error: "Semana inválida" });
+    const current = nextWeek(artToday());
+    if (String(week) !== current.key) return json(409, { error: "La semana cambió. Recargá la app para ver la nueva." });
+    if (weekStatus(current).locked) return json(423, { error: "La elección de esta semana ya cerró (sábado 14:00)." });
     const clean = {};
     for (const [day, menu] of Object.entries(choices || {})) {
       if (!DAY_KEYS.includes(day)) return json(400, { error: `Día inválido: ${day}` });
       if (!MENU_IDS.has(menu)) return json(400, { error: `Menú inválido: ${menu}` });
       clean[day] = menu;
     }
+    const previous = await choicesStore().get(choiceKey(cleanCode, week, employeeId), { type: "json" });
+    const updatedAt = new Date().toISOString();
     await choicesStore().setJSON(choiceKey(cleanCode, week, employeeId), {
       choices: clean,
-      updatedAt: new Date().toISOString(),
+      updatedAt,
+      firstSubmittedAt: previous?.firstSubmittedAt || previous?.updatedAt || updatedAt,
     });
-    return json(200, { ok: true, choices: clean });
+    let emailed = false;
+    if (employee.email) {
+      try {
+        const title = previous ? "✏️ Modificaste tu pedido de viandas" : "✅ Recibimos tu pedido de viandas";
+        emailed = await sendEmail(employee.email, title, emailTemplate(title, orderEmailHtml(employee, current, clean), "Ver mi pedido"));
+      } catch (err) {
+        console.error(`[order email] ${employee.email}: ${err?.message}`);
+      }
+    }
+    return json(200, { ok: true, choices: clean, updatedAt, modified: Boolean(previous), emailed });
   }
 
   if (method === "POST" && route === "push-status") {
@@ -361,6 +400,7 @@ export default async (req) => {
         hasPin: Boolean(emp.pinHash),
         reminderOptIn: Boolean(emp.reminderOptIn && emp.pushSubscriptions?.length),
         choices,
+        submittedAt: saved?.updatedAt || null,
         completed: DAY_KEYS.every((d) => choices[d]),
         survey: sv ? { repeat: sv.repeat || [], remove: sv.remove || [], ideas: sv.ideas || "" } : null,
       });
@@ -373,7 +413,33 @@ export default async (req) => {
       dayMenus: MENU_CYCLE[week.cycle],
       counts,
       people,
+      ...weekStatus(week),
     });
+  }
+
+  if (method === "POST" && route === "admin-remind") {
+    const { code, key: adminKey } = await readBody(req);
+    const cleanCode = String(code || "").toUpperCase();
+    const company = await companies().get(cleanCode, { type: "json" });
+    if (!company) return json(404, { error: "Empresa no encontrada" });
+    if (adminKey !== company.adminKey) return json(401, { error: "Clave de administrador incorrecta" });
+    const week = nextWeek(artToday());
+    if (weekStatus(week).locked) return json(423, { error: "La elección de esta semana ya cerró." });
+    const { blobs } = await employees().list({ prefix: `${cleanCode}__` });
+    let reminded = 0;
+    let pushes = 0;
+    for (const blob of blobs) {
+      const emp = await employees().get(blob.key, { type: "json" });
+      if (!emp) continue;
+      const saved = await choicesStore().get(choiceKey(cleanCode, week.key, emp.id), { type: "json" });
+      if (saved?.updatedAt) continue;
+      const title = "⏰ Te falta elegir tus viandas";
+      const body = `Elegí tu menú para la ${week.label}. Cerramos el sábado a las 14:00.`;
+      pushes += await sendPushToEmployee(emp, blob.key, title, body);
+      if (emp.email) await sendEmail(emp.email, title, emailTemplate(title, body)).catch(() => false);
+      reminded += 1;
+    }
+    return json(200, { ok: true, reminded, pushes });
   }
 
   return json(404, { error: "Ruta no encontrada" });
