@@ -43,7 +43,7 @@
       </div>
       <div class="hero">
         <h1>Comida casera para Kalis</h1>
-        <p>Cada empleado elige su menú para cada día: <strong>Potente</strong>, <strong>Equilibrado</strong> o <strong>Light</strong>. Todos los sábados te recordamos organizar la semana siguiente.</p>
+        <p>Elegí tus viandas para la semana.</p>
       </div>
       <div class="card">
         <h2>Entrá con tu empresa</h2>
@@ -131,12 +131,19 @@
         <button class="link-btn switch-user" type="button" data-switch-user>Cambiar usuario</button>
       </div>
 
-      <div id="menu-cards" class="menu-cards"></div>
+      <h2 id="semana" class="section-title">Tu semana 📅</h2>
+      <div id="week-grid" class="week-grid"></div>
+
+      <div class="card">
+        <strong>🔔 Notificaciones activadas</strong>
+        <button id="demo-btn" class="btn btn-outline btn-sm hidden" type="button">Enviar notificación de prueba</button>
+        <button class="link-btn" type="button" data-install-guide>Cómo instalar la app en tu celular</button>
+      </div>
 
       <section id="survey-section" class="hidden">
         <h2 class="section-title">Encuesta rápida 📋</h2>
         <div class="card">
-          <p class="muted" style="margin-top:0">Sobre la semana que termina. 30 segundos y después elegís tu semana nueva 👇</p>
+          <p class="muted" style="margin-top:0">Contanos qué te parecieron las viandas de la semana.</p>
           <p class="survey-q">🙌 ¿Qué platos te gustaría que se repitan más? <span class="muted">(podés elegir varios)</span></p>
           <div id="survey-repeat" class="day-chips"></div>
           <p class="survey-q">🚫 ¿Qué platos te gustaría que dejen de estar? <span class="muted">(podés elegir varios)</span></p>
@@ -146,15 +153,6 @@
           <button id="survey-submit" class="btn btn-primary" type="button">Enviar encuesta</button>
         </div>
       </section>
-
-      <h2 id="semana" class="section-title">Tu semana 📅</h2>
-      <div id="week-grid" class="week-grid"></div>
-
-      <div class="card">
-        <strong>🔔 Notificaciones activadas</strong>
-        <button id="demo-btn" class="btn btn-outline btn-sm hidden" type="button">Enviar notificación de prueba</button>
-        <button class="link-btn" type="button" data-install-guide>Cómo instalar la app en tu celular</button>
-      </div>
 
       <p class="footer-note">Hecho en casa, con cariño 🏠 · Como en Casa · Empresas</p>
     </section>
