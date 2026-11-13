@@ -77,7 +77,7 @@
             <select name="employee" id="login-select" required></select>
           </label>
           <label>Tu email
-            <input name="email" type="email" placeholder="El que cargó tu empresa" autocomplete="email" required />
+            <input name="email" type="email" placeholder="tu@correo.com" autocomplete="email" required />
           </label>
           <label id="pin-label">Tu PIN de 4 dígitos
             <input name="pin" id="login-pin" inputmode="numeric" pattern="\d{4}" maxlength="4" placeholder="••••" autocomplete="off" required />
@@ -200,13 +200,18 @@
         </div>
         <div class="card">
           <h2>Sumar gente 👥</h2>
-          <p class="muted" style="margin-top:0">Cargá nombre y email de cada empleado. Ellos se eligen de la lista y crean su PIN de 4 dígitos el primer día.</p>
+          <p class="muted" style="margin-top:0">Cada persona carga su correo y crea su PIN de 4 dígitos en el primer ingreso.</p>
+          <form id="import-employees-form">
+            <label>Nombres (uno por renglón)
+              <textarea name="names" rows="5" placeholder="Pegá acá la lista de nombres" required></textarea>
+            </label>
+            <button class="btn btn-primary btn-block" type="submit">Cargar lista de empleados</button>
+            <p id="import-employees-status" class="muted" role="status"></p>
+          </form>
+          <div class="divider">o</div>
           <form id="add-employee-form">
             <label>Nombre
               <input name="name" placeholder="Ej: Martina" required />
-            </label>
-            <label>Email
-              <input name="email" type="email" placeholder="Ej: martina@empresa.com" required />
             </label>
             <button class="btn btn-outline btn-block" type="submit">Agregar a la lista</button>
           </form>
