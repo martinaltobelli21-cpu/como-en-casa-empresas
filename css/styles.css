@@ -46,7 +46,9 @@ h1, h2, .logo strong { font-family: "Fraunces", Georgia, serif; }
   align-items: center;
   gap: 10px;
 }
-.logo { font-size: 18px; }
+.logo { font-size: 18px; display: inline-flex; align-items: center; gap: 8px; }
+.cec-mark { width: 28px; height: 28px; }
+.cec-logo { max-height: 76px; max-width: 76px; }
 .badge {
   background: var(--primary);
   color: #fff;
