@@ -198,6 +198,7 @@ async function loadEmployee() {
   renderWeek(data.week, data.menus, data.dayMenus);
   updateSticky();
   updatePushCard();
+  $("#demo-btn")?.classList.toggle("hidden", data.employee.name.trim().toLowerCase().replace(/\s+/g, "") !== "usuariodeprueba");
   show("employee");
 }
 
@@ -267,6 +268,26 @@ $("#push-btn")?.addEventListener("click", async () => {
   } catch (err) {
     toast(err.message);
   }
+});
+
+/* ---------- Demo (solo usuariodeprueba) ---------- */
+
+$("#demo-btn")?.addEventListener("click", async () => {
+  const btn = $("#demo-btn");
+  btn.disabled = true;
+  try {
+    const res = await api("demo-notify", {
+      method: "POST",
+      body: { code: session.code, employee: session.employeeId },
+    });
+    if (res.pushes > 0 && res.emailed) toast("Prueba enviada 🧪 Revisá la notificación y tu mail");
+    else if (res.pushes > 0) toast("Push enviada 🧪 El email no se pudo enviar (falta RESEND_API_KEY)");
+    else if (res.emailed) toast("Email enviado 🧪 Para la push, primero activá el 🔔 de arriba");
+    else toast("Nada enviado: activá el 🔔 de arriba y avisale al admin por RESEND_API_KEY");
+  } catch (err) {
+    toast(err.message);
+  }
+  btn.disabled = false;
 });
 
 /* ---------- Login con roster + PIN ---------- */

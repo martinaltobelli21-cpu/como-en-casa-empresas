@@ -18,6 +18,9 @@ import {
   surveyKey,
   hashPin,
   verifyPin,
+  sendPushToEmployee,
+  sendEmail,
+  emailTemplate,
 } from "./lib/shared.mjs";
 
 export const config = { path: "/api/*" };
@@ -239,6 +242,25 @@ export default async (req) => {
       updatedAt: new Date().toISOString(),
     });
     return json(200, { ok: true });
+  }
+
+  if (method === "POST" && route === "demo-notify") {
+    const { code, employee: employeeId } = await readBody(req);
+    const cleanCode = String(code || "").toUpperCase();
+    const employee = await authenticate(req, cleanCode, employeeId);
+    if (!employee) return json(401, { error: SESSION_ERROR });
+    if (employee.name.trim().toLowerCase().replace(/\s+/g, "") !== "usuariodeprueba") {
+      return json(403, { error: "Solo el usuario de prueba puede enviar la demo 🧪" });
+    }
+    const title = "EY, ES HORA DE ORGANIZAR TU PRÓXIMA SEMANA 👀";
+    const body = "Esto es una prueba de la app de viandas 🧪 Si estás viendo esto, la notificación funciona.";
+    const pushes = await sendPushToEmployee(employee, employeeKey(cleanCode, employeeId), title, body);
+    const emailed = await sendEmail(
+      process.env.DEMO_EMAIL || "martinaltobelli41@gmail.com",
+      `${title} (prueba 🧪)`,
+      emailTemplate(title, `${body}<br><br>Usuario de prueba: <strong>${employee.name}</strong> · Empresa: ${cleanCode}`, "Abrir la app")
+    );
+    return json(200, { ok: true, pushes, emailed });
   }
 
   if (method === "GET" && route === "summary") {

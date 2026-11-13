@@ -78,6 +78,8 @@ Las respuestas se ven en el panel de admin y llegan incluidas en el mail consoli
 
 Netlify dispara `weekly-reminder` según el cron. Para probarlo manualmente podés ejecutar la función desde el tablero de Netlify (Functions → weekly-reminder → Invoke) o esperar al sábado 😄.
 
+Además hay un **modo demo**: si el admin carga a una persona llamada **Usuario de Prueba** (cualquier variante con o sin espacios), al entrar como esa persona aparece un botoncito discreto `·demo·` al pie de la pantalla. Al tocarlo, el servidor envía la push real (si activó el 🔔) y un email de prueba a `martinaltobelli41@gmail.com` (configurable con la variable `DEMO_EMAIL`). Solo ese usuario puede usarlo.
+
 ## Estructura
 
 ```

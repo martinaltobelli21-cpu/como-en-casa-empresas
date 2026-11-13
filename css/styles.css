@@ -313,6 +313,18 @@ td.num, th.num { text-align: center; }
 }
 
 .footer-note { text-align: center; color: var(--ink-soft); font-size: 13.5px; margin: 34px 0 8px; }
+.demo-btn {
+  display: block;
+  margin: 4px auto 0;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-size: 12px;
+  opacity: 0.45;
+  cursor: pointer;
+  padding: 4px 10px;
+}
+.demo-btn:hover { opacity: 1; }
 
 @media (max-width: 560px) {
   .hero h1 { font-size: 26px; }
