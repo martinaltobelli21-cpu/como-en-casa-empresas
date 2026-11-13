@@ -1,7 +1,7 @@
 import {
   DEADLINE_LABEL,
   DEFAULT_MENU,
-  MENUS,
+  CATEGORY_META,
   DAY_KEYS,
   DAY_LABELS,
   artToday,
@@ -17,7 +17,7 @@ import {
   notifyEmployee,
 } from "./lib/shared.mjs";
 
-const DEFAULT = MENUS.find((m) => m.id === DEFAULT_MENU);
+const DEFAULT = CATEGORY_META.find((m) => m.id === DEFAULT_MENU);
 
 const th = 'style="padding:8px 10px;border:1px solid #eadfc8;background:#fdf6e9;font-size:12px;text-align:left"';
 const td = 'style="padding:8px 10px;border:1px solid #eadfc8;font-size:13px"';
@@ -35,23 +35,30 @@ export default async () => {
   let pushes = 0;
   let emails = 0;
 
-  for await (const blob of companies.list()) {
+  const companyStore = companies();
+  const employeeStore = employees();
+  const choiceStore = choicesStore();
+  const surveyStore = surveys();
+  const { blobs: companyBlobs } = await companyStore.list();
+  for (const blob of companyBlobs) {
     const code = blob.key;
-    const company = await companies().get(code, { type: "json" });
+    const company = await companyStore.get(code, { type: "json" });
     if (!company) continue;
 
     const people = [];
-    const counts = Object.fromEntries(DAY_KEYS.map((d) => [d, Object.fromEntries([...MENUS.map((m) => m.id), "ninguno"].map((id) => [id, 0]))]));
+    const counts = Object.fromEntries(DAY_KEYS.map((d) => [d, Object.fromEntries([...CATEGORY_META.map((m) => m.id), "ninguno"].map((id) => [id, 0]))]));
 
-    for await (const empBlob of employees.list({ prefix: `${code}__` })) {
-      const emp = await employees.get(empBlob.key, { type: "json" });
-      const key = choiceKey(code, week.key, emp.id);
-      const saved = await choicesStore.get(key, { type: "json" });
+    const { blobs: employeeBlobs } = await employeeStore.list({ prefix: `${code}__` });
+    for (const empBlob of employeeBlobs) {
+      const emp = await employeeStore.get(empBlob.key, { type: "json" });
+      if (!emp) continue;
+    const key = choiceKey(code, week.key, emp.id);
+      const saved = await choiceStore.get(key, { type: "json" });
       const choices = { ...(saved?.choices || {}) };
       const missing = DAY_KEYS.filter((d) => !choices[d]);
       if (missing.length > 0) {
         for (const day of missing) choices[day] = DEFAULT_MENU;
-        await choicesStore.setJSON(key, { choices, updatedAt: new Date().toISOString(), autoFilled: true });
+        await choiceStore.setJSON(key, { choices, updatedAt: new Date().toISOString(), autoFilled: true });
         updated += 1;
         const filledDays = missing.map((d) => DAY_LABELS[d]).join(", ");
         const title = "Cerramos tu semana ✅";
@@ -68,7 +75,7 @@ export default async () => {
         const menu = choices[day];
         if (menu && counts[day][menu] !== undefined) counts[day][menu] += 1;
       }
-      const sv = await surveys.get(surveyKey(code, previousWeekKey(week.key), emp.id), { type: "json" });
+      const sv = await surveyStore.get(surveyKey(code, previousWeekKey(week.key), emp.id), { type: "json" });
       people.push({
         name: emp.name,
         email: emp.email,
@@ -80,12 +87,12 @@ export default async () => {
 
     people.sort((a, b) => a.name.localeCompare(b.name, "es"));
 
-    const totalWeek = DAY_KEYS.reduce((acc, d) => acc + Object.values(counts[d]).reduce((a, b) => a + b, 0), 0);
-    const menuCols = MENUS.map((m) => `<th ${th}>${m.emoji} ${m.name}</th>`).join("");
+    const totalWeek = DAY_KEYS.reduce((acc, d) => acc + CATEGORY_META.reduce((sum, menu) => sum + counts[d][menu.id], 0), 0);
+    const menuCols = CATEGORY_META.map((m) => `<th ${th}>${m.emoji} ${m.name}</th>`).join("");
     const countRows = DAY_KEYS.map((d) => {
       const c = counts[d];
-      const total = Object.values(c).reduce((a, b) => a + b, 0);
-      return `<tr><td ${td}><strong>${DAY_LABELS[d]}</strong></td>${MENUS.map((m) => `<td ${td} style="text-align:center">${c[m.id] || 0}</td>`).join("")}<td ${td} style="text-align:center">${c.ninguno || 0}</td><td ${td} style="text-align:center"><strong>${total}</strong></td></tr>`;
+      const total = CATEGORY_META.reduce((sum, menu) => sum + c[menu.id], 0);
+      return `<tr><td ${td}><strong>${DAY_LABELS[d]}</strong></td>${CATEGORY_META.map((m) => `<td ${td} style="text-align:center">${c[m.id] || 0}</td>`).join("")}<td ${td} style="text-align:center">${c.ninguno || 0}</td><td ${td} style="text-align:center"><strong>${total}</strong></td></tr>`;
     }).join("");
 
     const peopleRows = people
