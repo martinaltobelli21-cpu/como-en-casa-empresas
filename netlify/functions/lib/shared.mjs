@@ -172,6 +172,7 @@ export function siteUrl() {
 }
 
 export async function sendEmail(to, subject, html) {
+  if (!to) return false;
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.log(`[email skipped, sin RESEND_API_KEY] ${to}: ${subject}`);
