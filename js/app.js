@@ -10,6 +10,9 @@ const state = { data: null, choices: {} };
 
 let session = JSON.parse(localStorage.getItem(LS_EMPLOYEE) || "null");
 let adminSession = JSON.parse(localStorage.getItem(LS_ADMIN) || "null");
+let pushEndpoint = null;
+let pushKey = null;
+let currentView;
 
 async function api(path, options = {}) {
   const headers = { "content-type": "application/json", ...(options.headers || {}) };
@@ -20,7 +23,7 @@ async function api(path, options = {}) {
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
   const body = await res.json().catch(() => ({}));
-  if (res.status === 401 && session?.token) {
+  if (res.status === 401 && session?.token && currentView !== "admin") {
     localStorage.removeItem(LS_EMPLOYEE);
     session = null;
     show("join");
@@ -39,11 +42,12 @@ function toast(msg) {
 }
 
 function show(view) {
-  for (const v of ["join", "login", "employee", "admin"]) {
+  currentView = view;
+  for (const v of ["join", "login", "push", "employee", "admin"]) {
     $(`#view-${v}`).classList.toggle("hidden", v !== view);
   }
   $("#sticky-bar").classList.toggle("hidden", view !== "employee");
-  $("#saturday-banner").classList.toggle("hidden", view === "admin" || view === "login" || !isSaturday());
+  $("#saturday-banner").classList.toggle("hidden", view !== "employee" || !isSaturday());
 }
 
 function isSaturday() {
@@ -161,6 +165,7 @@ function renderSurvey(lastWeek, done) {
         body: {
           code: session.code,
           employee: session.employeeId,
+          pushEndpoint,
           week: state.data.lastWeek.key,
           repeat: [...surveyState.repeat],
           remove: [...surveyState.remove],
@@ -190,6 +195,12 @@ async function loadEmployee() {
   const data = await api(`state?code=${session.code}&employee=${session.employeeId}`);
   state.data = data;
   state.choices = { ...data.choices };
+  if (!await checkPush()) return;
+  renderEmployee();
+}
+
+function renderEmployee() {
+  const data = state.data;
   $("#hello-line").textContent = `¡Hola, ${data.employee.name.split(" ")[0]}!`;
   $("#week-title").textContent = `Armá tu semana del ${data.week.days[0].iso.slice(8)} al ${data.week.days[5].iso.slice(8)}`;
   $("#week-sub").textContent = "Elegí un menú por día (lunes a sábado): Potente 🍖, Equilibrado 🥘 o Light 🌿. Podés cambiarlo hasta el sábado a las 14:00; después, los días sin elección quedan con Equilibrado.";
@@ -197,7 +208,6 @@ async function loadEmployee() {
   renderSurvey(data.lastWeek, data.surveyDone);
   renderWeek(data.week, data.menus, data.dayMenus);
   updateSticky();
-  updatePushCard();
   $("#demo-btn")?.classList.toggle("hidden", data.employee.name.trim().toLowerCase().replace(/\s+/g, "") !== "usuariodeprueba");
   show("employee");
 }
@@ -209,7 +219,7 @@ $("#confirm-btn")?.addEventListener("click", async () => {
   try {
     await api("choices", {
       method: "POST",
-      body: { code: session.code, employee: session.employeeId, week: state.data.week.key, choices: state.choices },
+      body: { code: session.code, employee: session.employeeId, pushEndpoint, week: state.data.week.key, choices: state.choices },
     });
     toast("¡Listo! Tu semana quedó guardada 🥘");
     btn.textContent = "✅ Semana confirmada";
@@ -232,41 +242,113 @@ function urlBase64ToUint8Array(base64) {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
-function updatePushCard() {
-  const card = $(".push-card");
-  if (!card) return;
-  const btn = $("#push-btn");
-  if (state.data?.employee?.reminderOptIn) {
-    card.classList.add("on");
-    btn.textContent = "✅ Activado";
+const appleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+
+function pushIssue() {
+  if (appleMobile && !standalone) return "En iPhone o iPad, agregá la página a la pantalla de inicio y abrila desde el ícono nuevo.";
+  if (!("Notification" in window && "serviceWorker" in navigator && "PushManager" in window)) {
+    return "Este navegador no admite notificaciones push. Abrí la app en Chrome o, en iPhone, instalala desde Safari.";
   }
+  if (Notification.permission === "denied") {
+    return "Las notificaciones están bloqueadas. Permitilas en la configuración del sitio o de la app y volvé a intentarlo.";
+  }
+  return "";
 }
 
-$("#push-btn")?.addEventListener("click", async () => {
-  const btn = $("#push-btn");
+function showPush(message, disabled = false) {
+  show("push");
+  $("#push-status").textContent = message;
+  $("#push-btn").disabled = disabled;
+}
+
+async function checkPush() {
+  pushEndpoint = null;
+  const issue = pushIssue();
+  if (issue) {
+    showPush(issue, appleMobile && !standalone || !("Notification" in window && "PushManager" in window));
+    return false;
+  }
+  showPush("Comprobando las notificaciones de este dispositivo…", true);
   try {
-    const { publicKey } = await api("push-public-key");
-    if (!publicKey) {
-      toast("El recordatorio se activa por email. Pedile al admin que configure las claves VAPID.");
+    ({ publicKey: pushKey } = await api("push-public-key"));
+    if (!pushKey) {
+      showPush("Las notificaciones todavía no están configuradas. Avisale a quien administra la app.", true);
+      return false;
+    }
+    if (Notification.permission === "granted") {
+      const registration = await navigator.serviceWorker.getRegistration();
+      const subscription = await registration?.pushManager.getSubscription();
+      if (subscription && samePushKey(subscription, urlBase64ToUint8Array(pushKey)) && state.data.employee.reminderOptIn) {
+        const result = await api("push-status", {
+          method: "POST",
+          body: { code: session.code, employee: session.employeeId, pushEndpoint: subscription.endpoint },
+        });
+        if (result.active) {
+          pushEndpoint = subscription.endpoint;
+          return true;
+        }
+      }
+    }
+    showPush("Tocá el botón y permití las notificaciones para continuar.");
+  } catch (err) {
+    if (session) showPush(err.message);
+  }
+  return false;
+}
+
+document.querySelectorAll("[data-install-guide]").forEach((button) => {
+  button.addEventListener("click", () => $("#install-guide").showModal());
+});
+
+$("#push-btn").addEventListener("click", async () => {
+  const btn = $("#push-btn");
+  btn.disabled = true;
+  try {
+    const issue = pushIssue();
+    if (issue) return showPush(issue);
+    if (!pushKey) {
+      if (await checkPush()) renderEmployee();
       return;
     }
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {
-      toast("Necesitamos permiso de notificaciones para avisarte el sábado 🙏");
-      return;
+      return showPush(pushIssue() || "Permití las notificaciones para continuar.");
     }
-    const reg = await navigator.serviceWorker.register("/sw.js");
-    await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+    await navigator.serviceWorker.register("/sw.js");
+    const reg = await navigator.serviceWorker.ready;
+    const applicationServerKey = urlBase64ToUint8Array(pushKey);
+    let sub = await reg.pushManager.getSubscription();
+    if (sub && !samePushKey(sub, applicationServerKey)) {
+      await sub.unsubscribe();
+      sub = null;
+    }
+    sub ||= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
     await api("push-subscribe", {
       method: "POST",
       body: { code: session.code, employee: session.employeeId, subscription: sub, optIn: true },
     });
     state.data.employee.reminderOptIn = true;
-    updatePushCard();
-    toast("¡Listo! Te avisamos el sábado 🔔");
+    pushEndpoint = sub.endpoint;
+    renderEmployee();
+    toast("¡Notificaciones activadas! 🔔");
   } catch (err) {
-    toast(err.message);
+    if (session) showPush(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function samePushKey(subscription, key) {
+  const current = new Uint8Array(subscription.options?.applicationServerKey || []);
+  return current.length === key.length && current.every((byte, i) => byte === key[i]);
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && currentView === "employee" && Notification.permission !== "granted") {
+    pushEndpoint = null;
+    showPush(pushIssue() || "Volvé a activar las notificaciones para continuar.");
   }
 });
 
@@ -278,12 +360,12 @@ $("#demo-btn")?.addEventListener("click", async () => {
   try {
     const res = await api("demo-notify", {
       method: "POST",
-      body: { code: session.code, employee: session.employeeId },
+      body: { code: session.code, employee: session.employeeId, pushEndpoint },
     });
     if (res.pushes > 0 && res.emailed) toast("Prueba enviada 🧪 Revisá la notificación y tu mail");
-    else if (res.pushes > 0) toast("Push enviada 🧪 El email no se pudo enviar (falta RESEND_API_KEY)");
-    else if (res.emailed) toast("Email enviado 🧪 Para la push, primero activá el 🔔 de arriba");
-    else toast("Nada enviado: activá el 🔔 de arriba y avisale al admin por RESEND_API_KEY");
+    else if (res.pushes > 0) toast("Notificación de prueba enviada. El email de prueba no se pudo enviar.");
+    else if (res.emailed) toast("Email enviado. No se pudo entregar la notificación de prueba.");
+    else toast("No se pudo enviar la prueba. Avisale a quien administra la app.");
   } catch (err) {
     toast(err.message);
   }
@@ -367,10 +449,13 @@ $("#login-form")?.addEventListener("submit", async (e) => {
   }
 });
 
-$("#switch-user")?.addEventListener("click", () => {
-  localStorage.removeItem(LS_EMPLOYEE);
-  session = null;
-  show("join");
+document.querySelectorAll("[data-switch-user]").forEach((button) => {
+  button.addEventListener("click", () => {
+    localStorage.removeItem(LS_EMPLOYEE);
+    session = null;
+    pushEndpoint = null;
+    show("join");
+  });
 });
 
 /* ---------- Admin ---------- */
