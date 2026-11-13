@@ -63,20 +63,6 @@ function isSaturday() {
 
 /* ---------- Empleado ---------- */
 
-function renderMenus(menus) {
-  $("#menu-cards").innerHTML =
-    menus
-      .map(
-        (m) => `
-      <div class="menu-card">
-        <h3>${m.emoji} ${m.name}</h3>
-        <p class="tagline">${m.tagline}</p>
-      </div>`
-      )
-      .join("") +
-    `<p class="cycle-note">El plato de cada día cambia con el ciclo de 2 semanas: la semana que viene te toca la <strong>${state.data.week.cycle === "A" ? "Semana 1" : "Semana 2"}</strong> del menú 📅</p>`;
-}
-
 function renderWeek(week, menus, dayMenus) {
   $("#week-grid").innerHTML = week.days
     .map((day) => {
@@ -210,8 +196,7 @@ function renderEmployee() {
   const data = state.data;
   $("#hello-line").textContent = `¡Hola, ${data.employee.name.split(" ")[0]}!`;
   $("#week-title").textContent = `Armá tu semana del ${data.week.days[0].iso.slice(8)} al ${data.week.days[5].iso.slice(8)}`;
-  $("#week-sub").textContent = "Elegí un menú por día (lunes a sábado): Potente 🍖, Equilibrado 🥘 o Light 🌿. Podés cambiarlo hasta el sábado a las 14:00; después, los días sin elección quedan con Equilibrado.";
-  renderMenus(data.menus);
+  $("#week-sub").textContent = "Elegí un menú por día, de lunes a sábado. Podés cambiarlo hasta el sábado a las 14:00. Después, los días sin elección quedan con Equilibrado.";
   renderSurvey(data.lastWeek, data.surveyDone);
   renderWeek(data.week, data.menus, data.dayMenus);
   updateSticky();
@@ -251,6 +236,7 @@ function urlBase64ToUint8Array(base64) {
 
 const appleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
   (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const android = /Android/i.test(navigator.userAgent);
 const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
 
 function pushIssue() {
@@ -309,6 +295,24 @@ document.querySelectorAll("[data-install-guide]").forEach((button) => {
   button.addEventListener("click", () => $("#install-guide").showModal());
 });
 
+function isPushServiceError(error) {
+  return /registration failed\s*-\s*push service error/i.test(error?.message || "");
+}
+
+async function subscribeToPush(manager, applicationServerKey) {
+  const options = { userVisibleOnly: true, applicationServerKey };
+  try {
+    return await manager.subscribe(options);
+  } catch (error) {
+    if (!android || !isPushServiceError(error)) throw error;
+    $("#push-status").textContent = "Volviendo a intentar activar las notificaciones…";
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const existing = await manager.getSubscription();
+    if (existing && samePushKey(existing, applicationServerKey)) return existing;
+    return manager.subscribe(options);
+  }
+}
+
 $("#push-btn").addEventListener("click", async () => {
   const btn = $("#push-btn");
   btn.disabled = true;
@@ -319,6 +323,7 @@ $("#push-btn").addEventListener("click", async () => {
       if (await checkPush()) renderEmployee();
       return;
     }
+    $("#push-status").textContent = "Activando las notificaciones…";
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {
       return showPush(pushIssue() || "Permití las notificaciones para continuar.");
@@ -331,7 +336,7 @@ $("#push-btn").addEventListener("click", async () => {
       await sub.unsubscribe();
       sub = null;
     }
-    sub ||= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
+    sub ||= await subscribeToPush(reg.pushManager, applicationServerKey);
     await api("push-subscribe", {
       method: "POST",
       body: { code: session.code, employee: session.employeeId, subscription: sub, optIn: true },
@@ -341,7 +346,9 @@ $("#push-btn").addEventListener("click", async () => {
     renderEmployee();
     toast("¡Notificaciones activadas! 🔔");
   } catch (err) {
-    if (session) showPush(err.message);
+    if (session) showPush(isPushServiceError(err)
+      ? "El servicio de notificaciones no respondió. Tocá Activar notificaciones para reintentar. Si sigue pasando, cerrá la app y volvé a abrirla."
+      : err.message);
   } finally {
     btn.disabled = false;
   }
@@ -370,7 +377,7 @@ $("#demo-btn")?.addEventListener("click", async () => {
       body: { code: session.code, employee: session.employeeId, pushEndpoint },
     });
     if (res.pushes > 0 && res.emailed) toast("Prueba enviada 🧪 Revisá la notificación y tu mail");
-    else if (res.pushes > 0) toast("Notificación de prueba enviada. El email de prueba no se pudo enviar.");
+    else if (res.pushes > 0) toast("Notificación de prueba enviada. El correo de prueba no se envió.");
     else if (res.emailed) toast("Email enviado. No se pudo entregar la notificación de prueba.");
     else toast("No se pudo enviar la prueba. Avisale a quien administra la app.");
   } catch (err) {
