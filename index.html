@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Como en Casa · Empresas</title>
+  <meta name="description" content="Viandas caseras para empresas: cada empleado elige Potente, Equilibrado o Light para cada día de la semana." />
+  <meta name="theme-color" content="#fbf3e4" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icons/icon-192.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="logo">🥘 <strong>Como en Casa</strong></span>
+      <span class="badge">Empresas</span>
+      <button id="admin-link" class="link-btn" type="button">Admin</button>
+    </div>
+  </header>
+
+  <div id="saturday-banner" class="saturday-banner hidden">
+    <div class="saturday-inner">
+      <div>
+        <strong>EY, ES HORA DE ORGANIZAR TU PRÓXIMA SEMANA 👀</strong>
+        <span id="saturday-sub">Elegí tus viandas en 1 minuto. Último día: cerramos a las 14:00.</span>
+      </div>
+      <a href="#semana" class="btn btn-light btn-sm">Elegir ahora</a>
+    </div>
+  </div>
+
+  <main id="app">
+    <!-- Vista: unirse -->
+    <section id="view-join" class="view hidden">
+      <div class="logos-row">
+        <span class="logo">🥘 <strong>Como en Casa</strong></span>
+        <span class="logos-sep">×</span>
+        <img src="/icons/kalis-logo.png" alt="Kalis" class="kalis-logo" />
+      </div>
+      <div class="hero">
+        <h1>Comida casera para Kalis</h1>
+        <p>Cada empleado elige su menú para cada día: <strong>Potente</strong>, <strong>Equilibrado</strong> o <strong>Light</strong>. Todos los sábados te recordamos organizar la semana siguiente.</p>
+      </div>
+      <div class="card">
+        <h2>Entrá con tu empresa</h2>
+        <p class="muted">Te dio el código quien organiza los pedidos en tu trabajo.</p>
+        <form id="join-form">
+          <label>Código de la empresa
+            <input name="code" placeholder="Ej: K7M2XA" autocomplete="organization" required maxlength="6" style="text-transform:uppercase" />
+          </label>
+          <button class="btn btn-primary btn-block" type="submit">Continuar 🥘</button>
+          <p id="join-error" class="error hidden"></p>
+        </form>
+      </div>
+    </section>
+
+    <!-- Vista: login de empleado -->
+    <section id="view-login" class="view hidden">
+      <div class="logos-row">
+        <span class="logo">🥘 <strong>Como en Casa</strong></span>
+        <span class="logos-sep">×</span>
+        <img src="/icons/kalis-logo.png" alt="Kalis" class="kalis-logo" />
+      </div>
+      <div class="hero">
+        <h1>Ingresá</h1>
+        <p class="muted" id="login-company"></p>
+      </div>
+      <div class="card">
+        <h2 id="login-title">¿Quién sos?</h2>
+        <form id="login-form">
+          <label>Elegí tu nombre
+            <select name="employee" id="login-select" required></select>
+          </label>
+          <label>Tu email
+            <input name="email" type="email" placeholder="El que cargó tu empresa" autocomplete="email" required />
+          </label>
+          <label id="pin-label">Tu PIN de 4 dígitos
+            <input name="pin" id="login-pin" inputmode="numeric" pattern="\d{4}" maxlength="4" placeholder="••••" autocomplete="off" required />
+          </label>
+          <label id="pin2-label" class="hidden">Repetí el PIN
+            <input name="pin2" id="login-pin2" inputmode="numeric" pattern="\d{4}" maxlength="4" placeholder="••••" autocomplete="off" />
+          </label>
+          <button class="btn btn-primary btn-block" type="submit" id="login-submit">Ingresar</button>
+          <p id="login-error" class="error hidden"></p>
+        </form>
+      </div>
+    </section>
+
+    <!-- Vista: empleado -->
+    <section id="view-employee" class="view hidden">
+      <div class="hero">
+        <p class="hello" id="hello-line">¡Hola!</p>
+        <h1 id="week-title">Armá tu semana</h1>
+        <p class="muted" id="week-sub">Elegí un menú por día (lunes a sábado). Podés cambiarlo hasta el sábado 14:00.</p>
+        <button id="switch-user" class="link-btn switch-user" type="button">No sos vos? Cambiar usuario</button>
+      </div>
+
+      <div id="menu-cards" class="menu-cards"></div>
+
+      <section id="survey-section" class="hidden">
+        <h2 class="section-title">Encuesta rápida 📋</h2>
+        <div class="card">
+          <p class="muted" style="margin-top:0">Sobre la semana que termina. 30 segundos y después elegís tu semana nueva 👇</p>
+          <p class="survey-q">🙌 ¿Qué platos te gustaría que se repitan más? <span class="muted">(podés elegir varios)</span></p>
+          <div id="survey-repeat" class="day-chips"></div>
+          <p class="survey-q">🚫 ¿Qué platos te gustaría que dejen de estar? <span class="muted">(podés elegir varios)</span></p>
+          <div id="survey-remove" class="day-chips"></div>
+          <p class="survey-q">✨ ¿Qué platos nuevos sumarías?</p>
+          <textarea id="survey-ideas" rows="2" placeholder="Ej: más pastas, algo vegetariano, menos pescado…"></textarea>
+          <button id="survey-submit" class="btn btn-primary" type="button">Enviar encuesta</button>
+        </div>
+      </section>
+
+      <h2 id="semana" class="section-title">Tu semana 📅</h2>
+      <div id="week-grid" class="week-grid"></div>
+
+      <div class="card push-card">
+        <div>
+          <strong>🔔 Recordatorio del sábado</strong>
+          <p class="muted">Te avisamos cada sábado: <em>"EY, ES HORA DE ORGANIZAR TU PRÓXIMA SEMANA"</em>.</p>
+        </div>
+        <button id="push-btn" class="btn btn-outline btn-sm" type="button">Activar</button>
+      </div>
+
+      <p class="footer-note">Hecho en casa, con cariño 🏠 · Como en Casa · Empresas</p>
+    </section>
+
+    <!-- Vista: admin -->
+    <section id="view-admin" class="view hidden">
+      <div id="admin-login" class="hidden">
+        <div class="hero">
+          <h1>Panel de la empresa</h1>
+          <p class="muted">Vé cuántas viandas de cada menú pedir por día y quién ya armó su semana.</p>
+        </div>
+        <div class="card">
+          <h2>Crear empresa</h2>
+          <form id="create-company-form">
+            <label>Nombre de la empresa
+              <input name="name" placeholder="Ej: Estudio Alto" required />
+            </label>
+            <button class="btn btn-primary btn-block" type="submit">Crear y obtener código</button>
+          </form>
+          <div class="divider">o</div>
+          <h2>Ya tenés código</h2>
+          <form id="admin-login-form">
+            <label>Código de la empresa
+              <input name="code" maxlength="6" placeholder="Ej: K7M2XA" required style="text-transform:uppercase" />
+            </label>
+            <label>Clave de administrador
+              <input name="key" placeholder="La que te dio la app al crear la empresa" required />
+            </label>
+            <button class="btn btn-outline btn-block" type="submit">Ver resumen</button>
+            <p id="admin-error" class="error hidden"></p>
+          </form>
+        </div>
+      </div>
+
+      <div id="admin-panel" class="hidden">
+        <div class="hero">
+          <h1 id="admin-company-name">Empresa</h1>
+          <p class="muted" id="admin-week-label"></p>
+        </div>
+        <div class="card code-card">
+          <div><strong>Código para empleados:</strong> <span id="admin-code" class="code"></span></div>
+          <button id="copy-code" class="btn btn-outline btn-sm" type="button">Copiar</button>
+        </div>
+        <div class="card">
+          <h2>Sumar gente 👥</h2>
+          <p class="muted" style="margin-top:0">Cargá nombre y email de cada empleado. Ellos se eligen de la lista y crean su PIN de 4 dígitos el primer día.</p>
+          <form id="add-employee-form">
+            <label>Nombre
+              <input name="name" placeholder="Ej: Martina" required />
+            </label>
+            <label>Email
+              <input name="email" type="email" placeholder="Ej: martina@empresa.com" required />
+            </label>
+            <button class="btn btn-outline btn-block" type="submit">Agregar a la lista</button>
+          </form>
+        </div>
+        <h2 class="section-title">Viandas por día 🍱</h2>
+        <div class="card table-card" id="counts-table"></div>
+        <h2 class="section-title">Tu gente 👥</h2>
+        <div class="card table-card" id="people-table"></div>
+        <h2 class="section-title">Encuesta de la semana pasada 📋</h2>
+        <div class="card table-card" id="surveys-table"></div>
+        <button id="copy-summary" class="btn btn-primary btn-block" type="button">Copiar resumen para WhatsApp</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="sticky-bar" class="sticky-bar hidden">
+    <div class="sticky-info">
+      <strong id="sticky-count">0 de 5 días</strong>
+      <span id="sticky-total" class="muted"></span>
+    </div>
+    <button id="confirm-btn" class="btn btn-primary" type="button">Confirmar semana</button>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

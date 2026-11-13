@@ -1,0 +1,14 @@
+{
+  "name": "como-en-casa-empresas",
+  "private": true,
+  "type": "module",
+  "description": "App de viandas para empresas de Como en Casa: cada empleado elige Potente, Equilibrado o Light por día.",
+  "scripts": {
+    "dev": "netlify dev",
+    "keys": "web-push generate-vapid-keys"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^7.4.0",
+    "web-push": "^3.6.7"
+  }
+}
