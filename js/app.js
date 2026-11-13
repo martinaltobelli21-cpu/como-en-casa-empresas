@@ -29,7 +29,11 @@ async function api(path, options = {}) {
   if (res.status === 401 && session?.token && currentView !== "admin") {
     localStorage.removeItem(LS_EMPLOYEE);
     session = null;
-    show("join");
+    const view = roster ? "login" : "join";
+    const error = $(`#${view}-error`);
+    error.textContent = body.error || "Tu sesión venció. Ingresá de nuevo.";
+    error.classList.remove("hidden");
+    show(view);
     throw new Error(body.error || "Tu sesión venció. Ingresá de nuevo.");
   }
   if (!res.ok) throw new Error(body.error || "Algo salió mal, probá de nuevo");
@@ -428,6 +432,8 @@ $("#login-form")?.addEventListener("submit", async (e) => {
     errEl.classList.remove("hidden");
     return;
   }
+  const button = $("#login-submit");
+  button.disabled = true;
   try {
     let res;
     if (!person.hasPin) {
@@ -443,12 +449,16 @@ $("#login-form")?.addEventListener("submit", async (e) => {
         body: { code: roster.code, employee: person.id, email: form.get("email"), pin },
       });
     }
+    person.hasPin = true;
+    updatePinMode();
     localStorage.setItem(LS_EMPLOYEE, JSON.stringify({ code: roster.code, employeeId: person.id, name: person.name, token: res.token }));
     session = JSON.parse(localStorage.getItem(LS_EMPLOYEE));
     await loadEmployee();
   } catch (err) {
     errEl.textContent = err.message;
     errEl.classList.remove("hidden");
+  } finally {
+    button.disabled = false;
   }
 });
 
@@ -646,8 +656,10 @@ $("#admin-link")?.addEventListener("click", openAdmin);
     try {
       await loadEmployee();
       return;
-    } catch {
-      localStorage.removeItem(LS_EMPLOYEE);
+    } catch (err) {
+      const error = $("#join-error");
+      error.textContent = err.message;
+      error.classList.remove("hidden");
     }
   }
   show("join");
