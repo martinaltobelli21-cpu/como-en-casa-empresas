@@ -58,8 +58,10 @@ export default async (req) => {
     const company = await companies().get(code, { type: "json" });
     if (!company) return json(404, { error: "No encontramos esa empresa. Revisá el código." });
     const people = [];
-    for await (const blob of employees().list({ prefix: `${code}__` })) {
+    const { blobs } = await employees().list({ prefix: `${code}__` });
+    for (const blob of blobs) {
       const emp = await employees().get(blob.key, { type: "json" });
+      if (!emp) continue;
       people.push({ id: emp.id, name: emp.name, hasPin: Boolean(emp.pinHash) });
     }
     people.sort((a, b) => a.name.localeCompare(b.name, "es"));
@@ -99,10 +101,12 @@ export default async (req) => {
     const emp = await employees().get(empKey, { type: "json" });
     if (!emp) return json(404, { error: "Empleado no encontrado" });
     await employees().delete(empKey);
-    for await (const blob of choicesStore().list({ prefix: `${cleanCode}__` })) {
+    const { blobs: choiceBlobs } = await choicesStore().list({ prefix: `${cleanCode}__` });
+    for (const blob of choiceBlobs) {
       if (blob.key.endsWith(`__${employeeId}`)) await choicesStore().delete(blob.key);
     }
-    for await (const blob of surveys().list({ prefix: `${cleanCode}__` })) {
+    const { blobs: surveyBlobs } = await surveys().list({ prefix: `${cleanCode}__` });
+    for (const blob of surveyBlobs) {
       if (blob.key.endsWith(`__${employeeId}`)) await surveys().delete(blob.key);
     }
     return json(200, { ok: true });
@@ -228,11 +232,12 @@ export default async (req) => {
     if (adminKey !== company.adminKey) return json(401, { error: "Clave de administrador incorrecta" });
     const week = nextWeek(artToday());
     const lastWeekKey = previousWeekKey(week.key);
-    const list = employees().list({ prefix: `${code}__` });
+    const { blobs } = await employees().list({ prefix: `${code}__` });
     const people = [];
     const counts = Object.fromEntries(DAY_KEYS.map((d) => [d, Object.fromEntries([...CATEGORY_META.map((m) => m.id), "ninguno"].map((id) => [id, 0]))]));
-    for await (const blob of list) {
+    for (const blob of blobs) {
       const emp = await employees().get(blob.key, { type: "json" });
+      if (!emp) continue;
       const saved = await choicesStore().get(choiceKey(code, week.key, emp.id), { type: "json" });
       const choices = saved?.choices || {};
       for (const day of DAY_KEYS) {
