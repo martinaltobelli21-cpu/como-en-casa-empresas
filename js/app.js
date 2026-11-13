@@ -6,6 +6,9 @@ const LS_EMPLOYEE = "cec_empresas_employee";
 const LS_ADMIN = "cec_empresas_admin";
 
 const $ = (sel) => document.querySelector(sel);
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+}[character]));
 const state = { data: null, choices: {} };
 
 let session = JSON.parse(localStorage.getItem(LS_EMPLOYEE) || "null");
@@ -386,7 +389,7 @@ $("#join-form")?.addEventListener("submit", async (e) => {
     roster.code = String(form.get("code")).trim().toUpperCase();
     const select = $("#login-select");
     select.innerHTML = roster.people
-      .map((p) => `<option value="${p.id}">${p.name}${p.hasPin ? "" : " · primer ingreso"}</option>`)
+      .map((p) => `<option value="${p.id}">${escapeHtml(p.name)}${p.hasPin ? "" : " · primer ingreso"}</option>`)
       .join("");
     $("#login-company").textContent = `Empresa: ${roster.company}`;
     updatePinMode();
@@ -481,7 +484,7 @@ function renderAdmin(data) {
     .map(
       (p) => `
       <tr>
-        <td><strong>${p.name}</strong><br><span class="muted">${p.email}</span></td>
+        <td><strong>${escapeHtml(p.name)}</strong><br><span class="muted">${escapeHtml(p.email) || "Correo pendiente"}</span></td>
         <td>${p.completed ? '<span class="pill-ok">Semana lista</span>' : '<span class="pill-no">Falta elegir</span>'}</td>
         <td>${p.hasPin ? "✅" : "⏳"}</td>
         <td>${p.reminderOptIn ? "🔔" : "—"}</td>
@@ -511,7 +514,7 @@ function renderAdmin(data) {
     .map(
       (p) => `
       <tr>
-        <td><strong>${p.name}</strong></td>
+        <td><strong>${escapeHtml(p.name)}</strong></td>
         <td>${p.survey.repeat.length ? `🙌 ${p.survey.repeat.join(" · ")}` : "—"}</td>
         <td>${p.survey.remove.length ? `🚫 ${p.survey.remove.join(" · ")}` : "—"}</td>
         <td>${p.survey.ideas || "—"}</td>
@@ -539,13 +542,48 @@ async function loadAdmin() {
   renderAdmin(data);
 }
 
+function openAdmin() {
+  show("admin");
+  $("#admin-panel").classList.add("hidden");
+  $("#admin-login").classList.toggle("hidden", Boolean(adminSession));
+  if (!adminSession) return;
+  loadAdmin().catch((err) => {
+    $("#admin-login").classList.remove("hidden");
+    $("#admin-error").textContent = err.message;
+    $("#admin-error").classList.remove("hidden");
+  });
+}
+
+$("#import-employees-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const button = form.querySelector("button");
+  const status = $("#import-employees-status");
+  const names = form.elements.names.value.split(/\r?\n/).map((name) => name.trim()).filter(Boolean);
+  button.disabled = true;
+  status.textContent = "Cargando la lista…";
+  try {
+    const { added, skipped } = await api("roster-import", {
+      method: "POST",
+      body: { code: adminSession.code, key: adminSession.adminKey, names },
+    });
+    status.textContent = `Personas agregadas: ${added}. Nombres repetidos o ya cargados: ${skipped}.`;
+    form.reset();
+    await loadAdmin();
+  } catch (err) {
+    status.textContent = err.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
 $("#add-employee-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const form = new FormData(e.target);
   try {
     await api("roster-add", {
       method: "POST",
-      body: { code: adminSession.code, key: adminSession.adminKey, name: form.get("name"), email: form.get("email") },
+      body: { code: adminSession.code, key: adminSession.adminKey, name: form.get("name") },
     });
     toast("Persona agregada ✅");
     e.target.reset();
@@ -592,12 +630,7 @@ $("#copy-code")?.addEventListener("click", () => {
   toast("Código copiado 📋");
 });
 
-$("#admin-link")?.addEventListener("click", () => {
-  show("admin");
-  $("#admin-login").classList.toggle("hidden", Boolean(adminSession));
-  $("#admin-panel").classList.toggle("hidden", !adminSession);
-  if (adminSession) loadAdmin().catch(() => {});
-});
+$("#admin-link")?.addEventListener("click", openAdmin);
 
 /* ---------- Arranque ---------- */
 
@@ -606,10 +639,7 @@ $("#admin-link")?.addEventListener("click", () => {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   }
   if (window.location.hash === "#admin") {
-    show("admin");
-    $("#admin-login").classList.toggle("hidden", Boolean(adminSession));
-    $("#admin-panel").classList.toggle("hidden", !adminSession);
-    if (adminSession) loadAdmin().catch(() => {});
+    openAdmin();
     return;
   }
   if (session) {
