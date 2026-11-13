@@ -9,7 +9,17 @@ const $ = (sel) => document.querySelector(sel);
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 }[character]));
-const state = { data: null, choices: {} };
+const state = { data: null, choices: {}, saved: {}, editing: true };
+const MENU_DOT = { potente: "#b5451f", equilibrado: "#7a8b5a", light: "#4e7d5b", ninguno: "#8a7a66" };
+const sameChoices = (a, b) => {
+  const ka = Object.keys(a), kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((k) => a[k] === b[k]);
+};
+const isDirty = () => !sameChoices(state.choices, state.saved);
+const buzz = () => { try { navigator.vibrate?.(12); } catch {} };
+const fmtDateTime = (iso) => new Intl.DateTimeFormat("es-AR", {
+  timeZone: "America/Argentina/Buenos_Aires", weekday: "long", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit",
+}).format(new Date(iso));
 
 let session = JSON.parse(localStorage.getItem(LS_EMPLOYEE) || "null");
 let adminSession = JSON.parse(localStorage.getItem(LS_ADMIN) || "null");
@@ -53,7 +63,9 @@ function show(view) {
   for (const v of ["join", "login", "push", "employee", "admin"]) {
     $(`#view-${v}`).classList.toggle("hidden", v !== view);
   }
-  $("#sticky-bar").classList.toggle("hidden", view !== "employee");
+  $("#sticky-bar").classList.toggle("hidden", view !== "employee" || !state.editing || Boolean(state.data?.locked));
+  $("#loader")?.classList.add("hidden");
+  $("#user-chip")?.classList.toggle("hidden", !(session && view === "employee"));
   $("#saturday-banner").classList.toggle("hidden", view !== "employee" || !isSaturday());
 }
 
@@ -90,8 +102,10 @@ function renderWeek(week, menus, dayMenus) {
   document.querySelectorAll(".chip, .option").forEach((btn) => {
     btn.addEventListener("click", () => {
       const { day, menu } = btn.dataset;
+      if (state.data?.locked) return;
       if (state.choices[day] === menu) delete state.choices[day];
       else state.choices[day] = menu;
+      buzz();
       paintChips();
       updateSticky();
     });
@@ -111,6 +125,8 @@ function paintChips() {
     if (picked === "ninguno") status.textContent = "⛔ día libre";
     else if (picked) status.textContent = "✅ elegido";
     else status.textContent = "falta elegir";
+    card.classList.toggle("is-picked", Boolean(picked));
+    card.classList.toggle("is-changed", (state.saved[card.dataset.day] || "") !== (picked || "") && Boolean(state.data?.submittedAt));
   });
 }
 
@@ -179,50 +195,173 @@ function updateSticky() {
   const count = Object.keys(state.choices).length;
   const total = state.data.week.days.length;
   const viandas = Object.values(state.choices).filter((m) => m && m !== "ninguno").length;
+  const submitted = Boolean(state.data.submittedAt);
+  const dirty = isDirty();
   $("#sticky-count").textContent = `${count} de ${total} días elegidos`;
   $("#sticky-total").textContent = viandas ? `${viandas} vianda${viandas === 1 ? "" : "s"}` : "Sin viandas todavía";
-  $("#confirm-btn").disabled = count === 0;
+  $("#sticky-progress-fill").style.width = `${Math.round((count / total) * 100)}%`;
+  $("#confirm-btn").textContent = submitted ? "Guardar cambios" : "Enviar pedido";
+  $("#confirm-btn").disabled = count === 0 || (submitted && !dirty);
+  $("#cancel-edit-btn").classList.toggle("hidden", !submitted);
+  $("#dirty-flag").classList.toggle("hidden", !(submitted && dirty));
 }
+
+/* ---------- Pedido enviado / modificar ---------- */
+
+function deadlineText() {
+  const { deadline, locked } = state.data;
+  if (!deadline) return "";
+  if (locked) return "🔒 La elección de esta semana ya cerró";
+  const ms = Date.parse(deadline) - Date.now();
+  const h = Math.floor(ms / 3600000);
+  const d = Math.floor(h / 24);
+  const rest = h % 24;
+  const m = Math.max(1, Math.floor((ms % 3600000) / 60000));
+  const left = d > 0 ? `${d} d ${rest} h` : h > 0 ? `${h} h ${m} min` : `${m} min`;
+  return `⏳ Cierra el sábado 14:00 · faltan ${left}`;
+}
+
+function paintDeadline() {
+  const chip = $("#deadline-chip");
+  if (!state.data) return;
+  chip.textContent = deadlineText();
+  chip.classList.toggle("hidden", !chip.textContent);
+  chip.classList.toggle("urgent", !state.data.locked && Date.parse(state.data.deadline) - Date.now() < 6 * 3600000);
+  chip.classList.toggle("closed", Boolean(state.data.locked));
+}
+setInterval(paintDeadline, 60000);
+
+function renderSummary() {
+  const data = state.data;
+  const box = $("#order-summary");
+  const rows = data.week.days.map((day) => {
+    const menu = state.saved[day.key];
+    const meta = data.menus.find((m) => m.id === menu);
+    const dish = menu === "ninguno" ? "Sin vianda" : meta ? data.dayMenus[day.key][menu] : "Sin elegir · queda Equilibrado al cierre";
+    const tag = menu === "ninguno" ? "Día libre" : meta ? `${meta.emoji} ${meta.name}` : "—";
+    return `<li class="summary-row${meta ? "" : " empty"}">
+      <span class="summary-dot" style="background:${MENU_DOT[menu] || "#d9ccb4"}"></span>
+      <span class="summary-day">${DAY_LABELS[day.key]} <span class="muted">${Number(day.iso.slice(8))}</span></span>
+      <span class="summary-dish"><span class="summary-tag">${tag}</span>${escapeHtml(dish)}</span>
+    </li>`;
+  }).join("");
+  const viandas = Object.values(state.saved).filter((m) => m && m !== "ninguno").length;
+  box.innerHTML = `
+    <div class="card order-card ${data.locked ? "locked" : ""}">
+      <div class="order-head">
+        <div class="order-status">
+          <span class="order-check">${data.locked ? "🔒" : "✓"}</span>
+          <div>
+            <strong>${data.locked ? "Pedido cerrado" : "Pedido enviado"}</strong>
+            <span class="muted">Enviado el ${fmtDateTime(data.submittedAt)}</span>
+          </div>
+        </div>
+        ${data.locked ? "" : '<button id="edit-order-btn" class="btn btn-outline btn-sm" type="button">✏️ ¿Querés modificar?</button>'}
+      </div>
+      <ul class="summary-list">${rows}</ul>
+      <div class="order-foot">
+        <span><strong>${viandas}</strong> vianda${viandas === 1 ? "" : "s"} para la ${escapeHtml(data.week.label)}</span>
+        <span class="muted">${data.locked ? "Ya no se puede modificar." : "Podés cambiarlo hasta el sábado 14:00."}</span>
+      </div>
+    </div>`;
+  $("#edit-order-btn")?.addEventListener("click", () => setEditing(true, true));
+}
+
+function setEditing(editing, scroll = false) {
+  state.editing = editing && !state.data.locked;
+  const submitted = Boolean(state.data.submittedAt);
+  $("#order-summary").classList.toggle("hidden", state.editing || !submitted);
+  $("#week-editor").classList.toggle("hidden", !state.editing);
+  if (!state.editing && submitted) renderSummary();
+  $("#week-title").textContent = state.editing
+    ? (submitted ? "Modificá tu pedido" : `Armá tu semana del ${Number(state.data.week.days[0].iso.slice(8))} al ${Number(state.data.week.days[5].iso.slice(8))}`)
+    : "Tu pedido de la semana";
+  $("#week-sub").textContent = state.editing
+    ? "Elegí un menú por día, de lunes a sábado. Los días que no elijas quedan con Equilibrado al cierre."
+    : `Semana del ${Number(state.data.week.days[0].iso.slice(8))} al ${Number(state.data.week.days[5].iso.slice(8))}. Te mandamos el resumen por mail.`;
+  $("#sticky-bar").classList.toggle("hidden", currentView !== "employee" || !state.editing);
+  updateSticky();
+  paintChips();
+  if (scroll) (state.editing ? $("#week-editor") : $("#app")).scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+$("#cancel-edit-btn").addEventListener("click", () => {
+  if (isDirty() && !confirm("¿Descartar los cambios que hiciste?")) return;
+  state.choices = { ...state.saved };
+  setEditing(false, true);
+});
+
+document.querySelectorAll("[data-fill]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (state.data?.locked) return;
+    const menu = btn.dataset.fill;
+    state.choices = {};
+    if (menu) for (const day of state.data.week.days) state.choices[day.key] = menu;
+    buzz();
+    paintChips();
+    updateSticky();
+  });
+});
+
+window.addEventListener("beforeunload", (e) => {
+  if (currentView === "employee" && state.editing && state.data?.submittedAt && isDirty()) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
 
 async function loadEmployee() {
   const data = await api(`state?code=${session.code}&employee=${session.employeeId}`);
   state.data = data;
   state.choices = { ...data.choices };
+  state.saved = { ...data.choices };
+  state.editing = !data.submittedAt && !data.locked;
   if (!await checkPush()) return;
   renderEmployee();
 }
 
 function renderEmployee() {
   const data = state.data;
-  $("#hello-line").textContent = `¡Hola, ${data.employee.name.split(" ")[0]}!`;
-  $("#week-title").textContent = `Armá tu semana del ${data.week.days[0].iso.slice(8)} al ${data.week.days[5].iso.slice(8)}`;
-  $("#week-sub").textContent = "Elegí un menú por día, de lunes a sábado. Podés cambiarlo hasta el sábado a las 14:00. Después, los días sin elección quedan con Equilibrado.";
+  const first = data.employee.name.split(" ")[0];
+  $("#hello-line").textContent = `¡Hola, ${first}!`;
+  $("#user-chip").textContent = data.employee.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+  $("#user-chip").title = data.employee.name;
   renderSurvey(data.lastWeek, data.surveyDone);
   renderWeek(data.week, data.menus, data.dayMenus);
-  updateSticky();
   $("#demo-btn")?.classList.toggle("hidden", data.employee.name.trim().toLowerCase().replace(/\s+/g, "") !== "usuariodeprueba");
   show("employee");
+  setEditing(state.editing);
+  if (data.locked && !data.submittedAt) {
+    $("#order-summary").classList.remove("hidden");
+    $("#order-summary").innerHTML = '<div class="card order-card locked"><strong>🔒 La elección de esta semana ya cerró</strong><p class="muted" style="margin:6px 0 0">Los días sin elegir quedaron con el menú Equilibrado.</p></div>';
+    $("#week-editor").classList.add("hidden");
+  }
+  paintDeadline();
 }
 
 $("#confirm-btn")?.addEventListener("click", async () => {
   const btn = $("#confirm-btn");
+  const missing = state.data.week.days.filter((d) => !state.choices[d.key]).length;
+  if (missing && !confirm(`Te ${missing === 1 ? "falta 1 día" : `faltan ${missing} días`}. Si no los elegís, quedan con el menú Equilibrado. ¿Enviar igual?`)) return;
+  const label = btn.textContent;
   btn.disabled = true;
-  btn.textContent = "Guardando…";
+  btn.textContent = "Enviando…";
   try {
-    await api("choices", {
+    const res = await api("choices", {
       method: "POST",
       body: { code: session.code, employee: session.employeeId, pushEndpoint, week: state.data.week.key, choices: state.choices },
     });
-    toast("¡Listo! Tu semana quedó guardada 🥘");
-    btn.textContent = "✅ Semana confirmada";
-    setTimeout(() => {
-      btn.textContent = "Confirmar semana";
-      updateSticky();
-    }, 2200);
+    state.choices = { ...res.choices };
+    state.saved = { ...res.choices };
+    state.data.choices = { ...res.choices };
+    state.data.submittedAt = res.updatedAt;
+    setEditing(false, true);
+    toast(res.modified ? "Pedido actualizado ✏️" : "¡Pedido enviado! 🥘");
   } catch (err) {
     toast(err.message);
-    btn.textContent = "Confirmar semana";
+    btn.textContent = label;
     updateSticky();
+    if (/cerró|cambió/.test(err.message)) setTimeout(() => loadEmployee().catch(() => {}), 1500);
   }
 });
 
@@ -471,9 +610,11 @@ $("#login-form")?.addEventListener("submit", async (e) => {
 
 document.querySelectorAll("[data-switch-user]").forEach((button) => {
   button.addEventListener("click", () => {
+    if (currentView === "employee" && state.editing && state.data?.submittedAt && isDirty() && !confirm("Tenés cambios sin guardar. ¿Salir igual?")) return;
     localStorage.removeItem(LS_EMPLOYEE);
     session = null;
     pushEndpoint = null;
+    state.data = null;
     show("join");
   });
 });
@@ -486,6 +627,28 @@ function renderAdmin(data) {
   $("#admin-company-name").textContent = data.company.name;
   $("#admin-week-label").textContent = `Resumen para la ${data.week.label} · ${data.week.cycle === "A" ? "Semana 1" : "Semana 2"} del ciclo`;
   $("#admin-code").textContent = data.company.code;
+  const done = data.people.filter((p) => p.submittedAt).length;
+  const totalPeople = data.people.length;
+  const pct = totalPeople ? Math.round((done / totalPeople) * 100) : 0;
+  const totalViandas = Object.values(data.counts).reduce((acc, c) => acc + Object.entries(c).filter(([k]) => k !== "ninguno").reduce((a, [, v]) => a + v, 0), 0);
+  $("#admin-progress").innerHTML = `
+    <div class="stats">
+      <div class="stat"><span class="stat-num">${done}/${totalPeople}</span><span class="muted">enviaron su pedido</span></div>
+      <div class="stat"><span class="stat-num">${totalViandas}</span><span class="muted">viandas pedidas</span></div>
+      <div class="stat"><span class="stat-num ${data.locked ? "" : "accent"}">${data.locked ? "Cerrado" : "Abierto"}</span><span class="muted">cierre sáb 14:00</span></div>
+    </div>
+    <div class="bar"><span style="width:${pct}%"></span></div>
+    ${!data.locked && done < totalPeople ? `<button id="remind-btn" class="btn btn-outline btn-sm" type="button">🔔 Recordar a los ${totalPeople - done} que faltan</button>` : ""}`;
+  $("#remind-btn")?.addEventListener("click", async (ev) => {
+    const b = ev.currentTarget;
+    if (!confirm("¿Mandar un recordatorio (notificación y mail) a quienes no enviaron su pedido?")) return;
+    b.disabled = true;
+    try {
+      const r = await api("admin-remind", { method: "POST", body: { code: adminSession.code, key: adminSession.adminKey } });
+      toast(`Recordatorio enviado a ${r.reminded} persona${r.reminded === 1 ? "" : "s"} 🔔`);
+    } catch (err) { toast(err.message); }
+    b.disabled = false;
+  });
 
   const head = `<tr><th>Día</th>${data.menus.map((m) => `<th class="num">${m.emoji} ${m.name}</th>`).join("")}<th class="num">⛔ No</th><th class="num">Total</th></tr>`;
   const rows = data.week.days
@@ -502,7 +665,7 @@ function renderAdmin(data) {
       (p) => `
       <tr>
         <td><strong>${escapeHtml(p.name)}</strong><br><span class="muted">${escapeHtml(p.email) || "Correo pendiente"}</span></td>
-        <td>${p.completed ? '<span class="pill-ok">Semana lista</span>' : '<span class="pill-no">Falta elegir</span>'}</td>
+        <td>${p.submittedAt ? `<span class="pill-ok">Enviado</span><br><span class="muted small">${fmtDateTime(p.submittedAt)}</span>` : '<span class="pill-no">Falta elegir</span>'}</td>
         <td>${p.hasPin ? "✅" : "⏳"}</td>
         <td>${p.reminderOptIn ? "🔔" : "—"}</td>
         <td><button type="button" class="link-btn remove-emp" data-id="${p.id}">Quitar</button></td>
