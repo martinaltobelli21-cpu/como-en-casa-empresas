@@ -8,6 +8,7 @@
   <meta name="theme-color" content="#fbf3e4" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icons/icon-192.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
@@ -54,6 +55,7 @@
           <button class="btn btn-primary btn-block" type="submit">Continuar 🥘</button>
           <p id="join-error" class="error hidden"></p>
         </form>
+        <button class="link-btn" type="button" data-install-guide>Cómo instalar la app en tu celular</button>
       </div>
     </section>
 
@@ -75,7 +77,7 @@
             <select name="employee" id="login-select" required></select>
           </label>
           <label>Tu email
-            <input name="email" type="email" placeholder="El que cargó tu empresa" autocomplete="email" required />
+            <input name="email" type="email" placeholder="tu@correo.com" autocomplete="email" required />
           </label>
           <label id="pin-label">Tu PIN de 4 dígitos
             <input name="pin" id="login-pin" inputmode="numeric" pattern="\d{4}" maxlength="4" placeholder="••••" autocomplete="off" required />
@@ -89,13 +91,44 @@
       </div>
     </section>
 
+    <section id="view-push" class="view hidden">
+      <div class="hero">
+        <h1>Activá las notificaciones</h1>
+        <p>Las notificaciones son obligatorias para elegir tus viandas. Te avisan cuándo abre y cuándo cierra la elección de la semana.</p>
+      </div>
+      <div class="card">
+        <button id="push-btn" class="btn btn-primary btn-block" type="button">Activar notificaciones</button>
+        <p id="push-status" class="muted" role="status" aria-live="polite"></p>
+        <button class="link-btn" type="button" data-install-guide>Cómo instalar la app en tu celular</button>
+        <button class="link-btn switch-user" type="button" data-switch-user>Cambiar usuario</button>
+      </div>
+    </section>
+
+    <dialog id="install-guide" class="card" aria-labelledby="install-title">
+      <h2 id="install-title">Instalá Como en Casa</h2>
+      <h3>iPhone (iOS 16.4 o posterior)</h3>
+      <ol>
+        <li>Abrí esta página en <strong>Safari</strong>.</li>
+        <li>Tocá <strong>Compartir</strong> (el cuadrado con flecha hacia arriba). Si está dentro del menú <strong>Más</strong>, abrilo primero.</li>
+        <li>Elegí <strong>Agregar a pantalla de inicio</strong>. Si aparece <strong>Abrir como app web</strong>, activalo. Tocá <strong>Agregar</strong>.</li>
+        <li>Abrí <strong>Como en Casa</strong> desde el ícono nuevo e ingresá con tu cuenta. Tocá <strong>Activar notificaciones</strong> y luego <strong>Permitir</strong>.</li>
+      </ol>
+      <h3>Android</h3>
+      <ol>
+        <li>Abrí esta página en <strong>Chrome</strong>.</li>
+        <li>Tocá el menú de <strong>tres puntos</strong> y elegí <strong>Instalar app</strong> o <strong>Agregar a pantalla de inicio</strong>. Confirmá la instalación.</li>
+        <li>Abrí <strong>Como en Casa</strong> desde el ícono nuevo e ingresá con tu cuenta. Tocá <strong>Activar notificaciones</strong> y luego <strong>Permitir</strong>.</li>
+      </ol>
+      <form method="dialog"><button class="btn btn-outline" type="submit">Cerrar</button></form>
+    </dialog>
+
     <!-- Vista: empleado -->
     <section id="view-employee" class="view hidden">
       <div class="hero">
         <p class="hello" id="hello-line">¡Hola!</p>
         <h1 id="week-title">Armá tu semana</h1>
         <p class="muted" id="week-sub">Elegí un menú por día (lunes a sábado). Podés cambiarlo hasta el sábado 14:00.</p>
-        <button id="switch-user" class="link-btn switch-user" type="button">No sos vos? Cambiar usuario</button>
+        <button class="link-btn switch-user" type="button" data-switch-user>Cambiar usuario</button>
       </div>
 
       <div id="menu-cards" class="menu-cards"></div>
@@ -117,15 +150,11 @@
       <h2 id="semana" class="section-title">Tu semana 📅</h2>
       <div id="week-grid" class="week-grid"></div>
 
-      <div class="card push-card">
-        <div>
-          <strong>🔔 Recordatorio del sábado</strong>
-          <p class="muted">Te avisamos cada sábado: <em>"EY, ES HORA DE ORGANIZAR TU PRÓXIMA SEMANA"</em>.</p>
-        </div>
-        <button id="push-btn" class="btn btn-outline btn-sm" type="button">Activar</button>
+      <div class="card">
+        <strong>🔔 Notificaciones activadas</strong>
+        <button id="demo-btn" class="btn btn-outline btn-sm hidden" type="button">Enviar notificación de prueba</button>
+        <button class="link-btn" type="button" data-install-guide>Cómo instalar la app en tu celular</button>
       </div>
-
-      <button id="demo-btn" class="demo-btn hidden" type="button" title="Probar notificación y email">·demo·</button>
 
       <p class="footer-note">Hecho en casa, con cariño 🏠 · Como en Casa · Empresas</p>
     </section>
@@ -171,13 +200,18 @@
         </div>
         <div class="card">
           <h2>Sumar gente 👥</h2>
-          <p class="muted" style="margin-top:0">Cargá nombre y email de cada empleado. Ellos se eligen de la lista y crean su PIN de 4 dígitos el primer día.</p>
+          <p class="muted" style="margin-top:0">Cada persona carga su correo y crea su PIN de 4 dígitos en el primer ingreso.</p>
+          <form id="import-employees-form">
+            <label>Nombres (uno por renglón)
+              <textarea name="names" rows="5" placeholder="Pegá acá la lista de nombres" required></textarea>
+            </label>
+            <button class="btn btn-primary btn-block" type="submit">Cargar lista de empleados</button>
+            <p id="import-employees-status" class="muted" role="status"></p>
+          </form>
+          <div class="divider">o</div>
           <form id="add-employee-form">
             <label>Nombre
               <input name="name" placeholder="Ej: Martina" required />
-            </label>
-            <label>Email
-              <input name="email" type="email" placeholder="Ej: martina@empresa.com" required />
             </label>
             <button class="btn btn-outline btn-block" type="submit">Agregar a la lista</button>
           </form>

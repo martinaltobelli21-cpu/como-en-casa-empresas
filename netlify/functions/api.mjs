@@ -28,6 +28,21 @@ export const config = { path: "/api/*" };
 const MENU_IDS = new Set([...CATEGORY_META.map((m) => m.id), "ninguno"]);
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const SESSION_ERROR = "Tu sesión venció. Ingresá de nuevo con tu email y PIN.";
+const PUSH_ERROR = "Activá las notificaciones de este dispositivo para continuar.";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalizedName(name) {
+  return name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
+}
+
+function pushPublicKey() {
+  return process.env.VAPID_PRIVATE_KEY && process.env.VAPID_PUBLIC_KEY || null;
+}
+
+function hasPush(employee, endpoint) {
+  return Boolean(pushPublicKey() && employee.reminderOptIn && endpoint &&
+    employee.pushSubscriptions?.some((subscription) => subscription.endpoint === endpoint));
+}
 
 async function authenticate(req, code, employeeId) {
   const token = req.headers.get("x-session-token") || "";
@@ -56,7 +71,7 @@ export default async (req) => {
   if (method === "OPTIONS") return json(200, { ok: true });
 
   if (method === "GET" && route === "push-public-key") {
-    return json(200, { publicKey: process.env.VAPID_PUBLIC_KEY || null });
+    return json(200, { publicKey: pushPublicKey() });
   }
 
   if (method === "POST" && route === "company") {
@@ -90,13 +105,13 @@ export default async (req) => {
     if (!company) return json(404, { error: "Empresa no encontrada" });
     if (key !== company.adminKey) return json(401, { error: "Clave de administrador incorrecta" });
     if (!name || String(name).trim().length < 2) return json(400, { error: "Falta el nombre" });
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) return json(400, { error: "Falta un email válido" });
+    if (email && !EMAIL_PATTERN.test(String(email).trim())) return json(400, { error: "Ingresá un email válido o dejalo vacío" });
     const id = crypto.randomUUID();
     await employees().setJSON(employeeKey(cleanCode, id), {
       id,
       code: cleanCode,
       name: String(name).trim(),
-      email: String(email).trim().toLowerCase(),
+      email: String(email || "").trim().toLowerCase() || null,
       pinHash: null,
       salt: null,
       pushSubscriptions: [],
@@ -104,6 +119,45 @@ export default async (req) => {
       createdAt: new Date().toISOString(),
     });
     return json(200, { ok: true, employeeId: id });
+  }
+
+  if (method === "POST" && route === "roster-import") {
+    const { code, key, names } = await readBody(req);
+    const cleanCode = String(code || "").trim().toUpperCase();
+    const company = await companies().get(cleanCode, { type: "json" });
+    if (!company) return json(404, { error: "Empresa no encontrada" });
+    if (key !== company.adminKey) return json(401, { error: "Clave de administrador incorrecta" });
+    if (!Array.isArray(names) || names.length === 0 || names.length > 100 ||
+        names.some((name) => typeof name !== "string" || name.trim().length < 2 || name.trim().length > 120)) {
+      return json(400, { error: "Ingresá entre 1 y 100 nombres, uno por renglón." });
+    }
+    const store = employees();
+    const { blobs } = await store.list({ prefix: `${cleanCode}__` });
+    const existing = await Promise.all(blobs.map(({ key }) => store.get(key, { type: "json", consistency: "strong" })));
+    const known = new Set(existing.filter(Boolean).map((employee) => normalizedName(employee.name)));
+    let added = 0;
+    const pending = [];
+    for (const value of names) {
+      const name = value.trim().replace(/\s+/g, " ");
+      const normalized = normalizedName(name);
+      if (known.has(normalized)) continue;
+      known.add(normalized);
+      const id = crypto.createHash("sha256").update(`${cleanCode}\n${normalized}`).digest("hex");
+      pending.push({ id, name });
+    }
+    for (let offset = 0; offset < pending.length; offset += 10) {
+      const created = await Promise.all(pending.slice(offset, offset + 10).map(async ({ id, name }) => {
+        const recordKey = employeeKey(cleanCode, id);
+        if (await store.get(recordKey, { type: "json", consistency: "strong" })) return 0;
+        await store.setJSON(recordKey, {
+          id, code: cleanCode, name, email: null, pinHash: null, salt: null,
+          pushSubscriptions: [], reminderOptIn: false, createdAt: new Date().toISOString(),
+        });
+        return 1;
+      }));
+      added += created.reduce((sum, count) => sum + count, 0);
+    }
+    return json(200, { added, skipped: names.length - added });
   }
 
   if (method === "POST" && route === "roster-remove") {
@@ -133,10 +187,13 @@ export default async (req) => {
     const emp = await employees().get(employeeKey(cleanCode, employeeId), { type: "json" });
     if (!emp) return json(404, { error: "Empleado no encontrado" });
     if (emp.pinHash) return json(400, { error: "Ya tenés PIN creado. Ingresá con tu PIN." });
-    if (String(email || "").trim().toLowerCase() !== emp.email) {
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    if (!EMAIL_PATTERN.test(cleanEmail)) return json(400, { error: "Ingresá un email válido." });
+    if (emp.email && cleanEmail !== emp.email) {
       return json(403, { error: "El email no coincide con el que cargó tu empresa. Revisalo o avisale al admin." });
     }
     if (!/^\d{4}$/.test(String(pin || ""))) return json(400, { error: "El PIN debe tener 4 dígitos" });
+    emp.email = cleanEmail;
     emp.salt = crypto.randomBytes(8).toString("hex");
     emp.pinHash = hashPin(cleanCode, employeeId, String(pin), emp.salt);
     emp.sessionToken = crypto.randomBytes(24).toString("base64url");
@@ -194,10 +251,11 @@ export default async (req) => {
   }
 
   if (method === "POST" && route === "choices") {
-    const { code, employee: employeeId, week, choices } = await readBody(req);
+    const { code, employee: employeeId, pushEndpoint, week, choices } = await readBody(req);
     const cleanCode = String(code || "").toUpperCase();
     const employee = await authenticate(req, cleanCode, employeeId);
     if (!employee) return json(401, { error: SESSION_ERROR });
+    if (!hasPush(employee, pushEndpoint)) return json(403, { error: PUSH_ERROR });
     if (!week || !/^\d{4}-\d{2}-\d{2}$/.test(String(week))) return json(400, { error: "Semana inválida" });
     const clean = {};
     for (const [day, menu] of Object.entries(choices || {})) {
@@ -212,26 +270,37 @@ export default async (req) => {
     return json(200, { ok: true, choices: clean });
   }
 
+  if (method === "POST" && route === "push-status") {
+    const { code, employee: employeeId, pushEndpoint } = await readBody(req);
+    const employee = await authenticate(req, String(code || "").toUpperCase(), employeeId);
+    if (!employee) return json(401, { error: SESSION_ERROR });
+    return json(200, { active: hasPush(employee, pushEndpoint) });
+  }
+
   if (method === "POST" && route === "push-subscribe") {
     const { code, employee: employeeId, subscription, optIn } = await readBody(req);
     const cleanCode = String(code || "").toUpperCase();
     const key = employeeKey(cleanCode, employeeId);
     const employee = await authenticate(req, cleanCode, employeeId);
     if (!employee) return json(401, { error: SESSION_ERROR });
-    employee.reminderOptIn = Boolean(optIn);
-    if (subscription?.endpoint) {
-      const rest = (employee.pushSubscriptions || []).filter((s) => s.endpoint !== subscription.endpoint);
-      employee.pushSubscriptions = [...rest, subscription];
+    if (!pushPublicKey()) return json(503, { error: "Las notificaciones todavía no están configuradas." });
+    if (optIn !== true || typeof subscription?.endpoint !== "string" ||
+        !subscription.endpoint.startsWith("https://") || !subscription.keys?.auth || !subscription.keys?.p256dh) {
+      return json(400, { error: "No se pudo registrar la suscripción de este dispositivo." });
     }
+    employee.reminderOptIn = true;
+    const rest = (employee.pushSubscriptions || []).filter((s) => s.endpoint !== subscription.endpoint);
+    employee.pushSubscriptions = [...rest, subscription];
     await employees().setJSON(key, employee);
     return json(200, { ok: true, reminderOptIn: employee.reminderOptIn });
   }
 
   if (method === "POST" && route === "survey") {
-    const { code, employee: employeeId, week, repeat, remove, ideas } = await readBody(req);
+    const { code, employee: employeeId, pushEndpoint, week, repeat, remove, ideas } = await readBody(req);
     const cleanCode = String(code || "").toUpperCase();
     const employee = await authenticate(req, cleanCode, employeeId);
     if (!employee) return json(401, { error: SESSION_ERROR });
+    if (!hasPush(employee, pushEndpoint)) return json(403, { error: PUSH_ERROR });
     if (!week || !/^\d{4}-\d{2}-\d{2}$/.test(String(week))) return json(400, { error: "Semana inválida" });
     const cleanList = (arr) =>
       Array.isArray(arr) ? arr.filter((x) => typeof x === "string" && x.trim()).slice(0, 20).map((s) => s.trim().slice(0, 200)) : [];
@@ -245,13 +314,14 @@ export default async (req) => {
   }
 
   if (method === "POST" && route === "demo-notify") {
-    const { code, employee: employeeId } = await readBody(req);
+    const { code, employee: employeeId, pushEndpoint } = await readBody(req);
     const cleanCode = String(code || "").toUpperCase();
     const employee = await authenticate(req, cleanCode, employeeId);
     if (!employee) return json(401, { error: SESSION_ERROR });
     if (employee.name.trim().toLowerCase().replace(/\s+/g, "") !== "usuariodeprueba") {
       return json(403, { error: "Solo el usuario de prueba puede enviar la demo 🧪" });
     }
+    if (!hasPush(employee, pushEndpoint)) return json(403, { error: PUSH_ERROR });
     const title = "EY, ES HORA DE ORGANIZAR TU PRÓXIMA SEMANA 👀";
     const body = "Esto es una prueba de la app de viandas 🧪 Si estás viendo esto, la notificación funciona.";
     const pushes = await sendPushToEmployee(employee, employeeKey(cleanCode, employeeId), title, body);
@@ -289,7 +359,7 @@ export default async (req) => {
         name: emp.name,
         email: emp.email,
         hasPin: Boolean(emp.pinHash),
-        reminderOptIn: emp.reminderOptIn,
+        reminderOptIn: Boolean(emp.reminderOptIn && emp.pushSubscriptions?.length),
         choices,
         completed: DAY_KEYS.every((d) => choices[d]),
         survey: sv ? { repeat: sv.repeat || [], remove: sv.remove || [], ideas: sv.ideas || "" } : null,
