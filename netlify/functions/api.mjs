@@ -24,6 +24,18 @@ export const config = { path: "/api/*" };
 
 const MENU_IDS = new Set([...CATEGORY_META.map((m) => m.id), "ninguno"]);
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const SESSION_ERROR = "Tu sesión venció. Ingresá de nuevo con tu email y PIN.";
+
+async function authenticate(req, code, employeeId) {
+  const token = req.headers.get("x-session-token") || "";
+  if (!token) return null;
+  const emp = await employees().get(employeeKey(code, employeeId), { type: "json" });
+  if (!emp?.sessionToken) return null;
+  const given = Buffer.from(token);
+  const stored = Buffer.from(emp.sessionToken);
+  if (given.length !== stored.length || !crypto.timingSafeEqual(given, stored)) return null;
+  return emp;
+}
 
 async function readBody(req) {
   try {
@@ -124,8 +136,10 @@ export default async (req) => {
     if (!/^\d{4}$/.test(String(pin || ""))) return json(400, { error: "El PIN debe tener 4 dígitos" });
     emp.salt = crypto.randomBytes(8).toString("hex");
     emp.pinHash = hashPin(cleanCode, employeeId, String(pin), emp.salt);
+    emp.sessionToken = crypto.randomBytes(24).toString("base64url");
+    emp.sessionCreatedAt = new Date().toISOString();
     await employees().setJSON(employeeKey(cleanCode, employeeId), emp);
-    return json(200, { ok: true, name: emp.name });
+    return json(200, { ok: true, name: emp.name, token: emp.sessionToken });
   }
 
   if (method === "POST" && route === "login") {
@@ -138,7 +152,10 @@ export default async (req) => {
       return json(403, { error: "El email no coincide. Revisalo o avisale al admin." });
     }
     if (!verifyPin(emp, cleanCode, String(pin || ""))) return json(403, { error: "PIN incorrecto" });
-    return json(200, { ok: true, name: emp.name });
+    emp.sessionToken = crypto.randomBytes(24).toString("base64url");
+    emp.sessionCreatedAt = new Date().toISOString();
+    await employees().setJSON(employeeKey(cleanCode, employeeId), emp);
+    return json(200, { ok: true, name: emp.name, token: emp.sessionToken });
   }
 
   if (method === "GET" && route === "state") {
@@ -146,8 +163,8 @@ export default async (req) => {
     const employeeId = url.searchParams.get("employee") || "";
     const company = await companies().get(code, { type: "json" });
     if (!company) return json(404, { error: "Empresa no encontrada" });
-    const employee = await employees().get(employeeKey(code, employeeId), { type: "json" });
-    if (!employee) return json(404, { error: "Empleado no encontrado" });
+    const employee = await authenticate(req, code, employeeId);
+    if (!employee) return json(401, { error: SESSION_ERROR });
     const week = nextWeek(artToday());
     const saved = await choicesStore().get(choiceKey(code, week.key, employeeId), { type: "json" });
     const lastWeekKey = previousWeekKey(week.key);
@@ -176,8 +193,8 @@ export default async (req) => {
   if (method === "POST" && route === "choices") {
     const { code, employee: employeeId, week, choices } = await readBody(req);
     const cleanCode = String(code || "").toUpperCase();
-    const employee = await employees().get(employeeKey(cleanCode, employeeId), { type: "json" });
-    if (!employee) return json(404, { error: "Empleado no encontrado" });
+    const employee = await authenticate(req, cleanCode, employeeId);
+    if (!employee) return json(401, { error: SESSION_ERROR });
     if (!week || !/^\d{4}-\d{2}-\d{2}$/.test(String(week))) return json(400, { error: "Semana inválida" });
     const clean = {};
     for (const [day, menu] of Object.entries(choices || {})) {
@@ -196,8 +213,8 @@ export default async (req) => {
     const { code, employee: employeeId, subscription, optIn } = await readBody(req);
     const cleanCode = String(code || "").toUpperCase();
     const key = employeeKey(cleanCode, employeeId);
-    const employee = await employees().get(key, { type: "json" });
-    if (!employee) return json(404, { error: "Empleado no encontrado" });
+    const employee = await authenticate(req, cleanCode, employeeId);
+    if (!employee) return json(401, { error: SESSION_ERROR });
     employee.reminderOptIn = Boolean(optIn);
     if (subscription?.endpoint) {
       const rest = (employee.pushSubscriptions || []).filter((s) => s.endpoint !== subscription.endpoint);
@@ -210,8 +227,8 @@ export default async (req) => {
   if (method === "POST" && route === "survey") {
     const { code, employee: employeeId, week, repeat, remove, ideas } = await readBody(req);
     const cleanCode = String(code || "").toUpperCase();
-    const employee = await employees().get(employeeKey(cleanCode, employeeId), { type: "json" });
-    if (!employee) return json(404, { error: "Empleado no encontrado" });
+    const employee = await authenticate(req, cleanCode, employeeId);
+    if (!employee) return json(401, { error: SESSION_ERROR });
     if (!week || !/^\d{4}-\d{2}-\d{2}$/.test(String(week))) return json(400, { error: "Semana inválida" });
     const cleanList = (arr) =>
       Array.isArray(arr) ? arr.filter((x) => typeof x === "string" && x.trim()).slice(0, 20).map((s) => s.trim().slice(0, 200)) : [];

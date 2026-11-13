@@ -12,12 +12,20 @@ let session = JSON.parse(localStorage.getItem(LS_EMPLOYEE) || "null");
 let adminSession = JSON.parse(localStorage.getItem(LS_ADMIN) || "null");
 
 async function api(path, options = {}) {
+  const headers = { "content-type": "application/json", ...(options.headers || {}) };
+  if (session?.token) headers["x-session-token"] = session.token;
   const res = await fetch(`${API}/${path}`, {
-    headers: { "content-type": "application/json" },
     ...options,
+    headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
   const body = await res.json().catch(() => ({}));
+  if (res.status === 401 && session?.token) {
+    localStorage.removeItem(LS_EMPLOYEE);
+    session = null;
+    show("join");
+    throw new Error(body.error || "Tu sesión venció. Ingresá de nuevo.");
+  }
   if (!res.ok) throw new Error(body.error || "Algo salió mal, probá de nuevo");
   return body;
 }
@@ -315,20 +323,21 @@ $("#login-form")?.addEventListener("submit", async (e) => {
     return;
   }
   try {
+    let res;
     if (!person.hasPin) {
       const pin2 = String(form.get("pin2") || "");
       if (pin !== pin2) throw new Error("Los PIN no coinciden");
-      await api("enroll", {
+      res = await api("enroll", {
         method: "POST",
         body: { code: roster.code, employee: person.id, email: form.get("email"), pin },
       });
     } else {
-      await api("login", {
+      res = await api("login", {
         method: "POST",
         body: { code: roster.code, employee: person.id, email: form.get("email"), pin },
       });
     }
-    localStorage.setItem(LS_EMPLOYEE, JSON.stringify({ code: roster.code, employeeId: person.id, name: person.name }));
+    localStorage.setItem(LS_EMPLOYEE, JSON.stringify({ code: roster.code, employeeId: person.id, name: person.name, token: res.token }));
     session = JSON.parse(localStorage.getItem(LS_EMPLOYEE));
     await loadEmployee();
   } catch (err) {

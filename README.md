@@ -33,9 +33,10 @@ Las respuestas se ven en el panel de admin y llegan incluidas en el mail consoli
 
 1. **El admin** entra a `/#admin`, crea la empresa y le da el **código de 6 caracteres** a los empleados. En el panel carga a cada empleado (nombre + email).
 2. **Cada empleado** entra, pone el código y se elige de un **desplegable con la lista de empleados**. El primer ingreso pone su email (tiene que coincidir con el cargado por la empresa) y **crea un PIN de 4 dígitos**; los siguientes ingresos entran con email + PIN. Así nadie entra con la cuenta de otro.
-3. Elige **un menú por día** (lunes a sábado) para la semana próxima y toca **Confirmar semana**. Puede cambiarla cuando quiera.
-4. El admin ve el **resumen semanal**: cuántas viandas de cada menú pedir por día y quién ya armó su semana, con botón para copiar el resumen por WhatsApp.
-5. El **sábado**, la función programada envía el recordatorio a todos (push + email), avisando quién ya tiene la semana lista.
+3. Al ingresar, el servidor entrega un **token de sesión** que el navegador guarda y manda en cada llamada. Todas las rutas de empleado (`state`, `choices`, `push-subscribe`, `survey`) lo validan: sin token o con token inválido, el servidor responde 401 y la app vuelve a la pantalla de ingreso.
+4. Elige **un menú por día** (lunes a sábado) para la semana próxima y toca **Confirmar semana**. Puede cambiarla cuando quiera.
+5. El admin ve el **resumen semanal**: cuántas viandas de cada menú pedir por día y quién ya armó su semana, con botón para copiar el resumen por WhatsApp.
+6. El **sábado**, la función programada envía el recordatorio a todos (push + email), avisando quién ya tiene la semana lista.
 
 ## Stack (100% gratis o incluido en tu plan de Netlify)
 
