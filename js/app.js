@@ -123,7 +123,7 @@ function paintChips() {
     const picked = state.choices[card.dataset.day];
     const status = card.querySelector(".day-status");
     if (picked === "ninguno") status.textContent = "⛔ día libre";
-    else if (picked) status.textContent = "✅ elegido";
+    else if (picked) status.textContent = "elegido";
     else status.textContent = "falta elegir";
     card.classList.toggle("is-picked", Boolean(picked));
     card.classList.toggle("is-changed", (state.saved[card.dataset.day] || "") !== (picked || "") && Boolean(state.data?.submittedAt));
@@ -141,7 +141,7 @@ function surveyChip(dish, question) {
 function renderSurvey(lastWeek, done) {
   const section = $("#survey-section");
   if (done) {
-    section.innerHTML = `<h2 class="section-title">Encuesta rápida 📋</h2><div class="card"><strong>¡Gracias por responder! 🙏</strong><p class="muted" style="margin:4px 0 0">Tus respuestas de la semana que terminó ya fueron enviadas.</p></div>`;
+    section.innerHTML = `<h2 class="section-title">Encuesta rápida</h2><div class="card"><strong>¡Gracias por responder!</strong><p class="muted" style="margin:4px 0 0">Tus respuestas de la semana que terminó ya fueron enviadas.</p></div>`;
     section.classList.remove("hidden");
     return;
   }
@@ -182,7 +182,7 @@ function renderSurvey(lastWeek, done) {
         },
       });
       renderSurvey(null, true);
-      toast("¡Encuesta enviada, gracias! 🙏");
+      toast("¡Encuesta enviada, gracias!");
     } catch (err) {
       toast(err.message);
       btn.textContent = "Enviar encuesta";
@@ -211,7 +211,7 @@ function updateSticky() {
 function deadlineText() {
   const { deadline, locked } = state.data;
   if (!deadline) return "";
-  if (locked) return "🔒 La elección de esta semana ya cerró";
+  if (locked) return "La elección de esta semana ya cerró";
   const ms = Date.parse(deadline) - Date.now();
   const h = Math.floor(ms / 3600000);
   const d = Math.floor(h / 24);
@@ -333,7 +333,7 @@ function renderEmployee() {
   setEditing(state.editing);
   if (data.locked && !data.submittedAt) {
     $("#order-summary").classList.remove("hidden");
-    $("#order-summary").innerHTML = '<div class="card order-card locked"><strong>🔒 La elección de esta semana ya cerró</strong><p class="muted" style="margin:6px 0 0">Los días sin elegir quedaron con el menú Equilibrado.</p></div>';
+    $("#order-summary").innerHTML = '<div class="card order-card locked"><strong>La elección de esta semana ya cerró</strong><p class="muted" style="margin:6px 0 0">Los días sin elegir quedaron con el menú Equilibrado.</p></div>';
     $("#week-editor").classList.add("hidden");
   }
   paintDeadline();
@@ -356,7 +356,7 @@ $("#confirm-btn")?.addEventListener("click", async () => {
     state.data.choices = { ...res.choices };
     state.data.submittedAt = res.updatedAt;
     setEditing(false, true);
-    toast(res.modified ? "Pedido actualizado ✏️" : "¡Pedido enviado! 🥘");
+    toast(res.modified ? "Pedido actualizado" : "¡Pedido enviado!");
   } catch (err) {
     toast(err.message);
     btn.textContent = label;
@@ -483,7 +483,7 @@ $("#push-btn").addEventListener("click", async () => {
     state.data.employee.reminderOptIn = true;
     pushEndpoint = sub.endpoint;
     renderEmployee();
-    toast("¡Notificaciones activadas! 🔔");
+    toast("¡Notificaciones activadas!");
   } catch (err) {
     if (session) showPush(isPushServiceError(err)
       ? "El servicio de notificaciones no respondió. Tocá Activar notificaciones para reintentar. Si sigue pasando, cerrá la app y volvé a abrirla."
@@ -515,7 +515,7 @@ $("#demo-btn")?.addEventListener("click", async () => {
       method: "POST",
       body: { code: session.code, employee: session.employeeId, pushEndpoint },
     });
-    if (res.pushes > 0 && res.emailed) toast("Prueba enviada 🧪 Revisá la notificación y tu mail");
+    if (res.pushes > 0 && res.emailed) toast("Prueba enviada. Revisá la notificación y tu mail");
     else if (res.pushes > 0) toast("Notificación de prueba enviada. El correo de prueba no se envió.");
     else if (res.emailed) toast("Email enviado. No se pudo entregar la notificación de prueba.");
     else toast("No se pudo enviar la prueba. Avisale a quien administra la app.");
@@ -670,14 +670,14 @@ function renderAdmin(data) {
       <div class="stat"><span class="stat-num ${data.locked ? "" : "accent"}">${data.locked ? "Cerrado" : "Abierto"}</span><span class="muted">cierre sáb 14:00</span></div>
     </div>
     <div class="bar"><span style="width:${pct}%"></span></div>
-    ${!data.locked && done < totalPeople ? `<button id="remind-btn" class="btn btn-outline btn-sm" type="button">🔔 Recordar a los ${totalPeople - done} que faltan</button>` : ""}`;
+    ${!data.locked && done < totalPeople ? `<button id="remind-btn" class="btn btn-outline btn-sm" type="button">Recordar a los ${totalPeople - done} que faltan</button>` : ""}`;
   $("#remind-btn")?.addEventListener("click", async (ev) => {
     const b = ev.currentTarget;
     if (!confirm("¿Mandar un recordatorio (notificación y mail) a quienes no enviaron su pedido?")) return;
     b.disabled = true;
     try {
       const r = await api("admin-remind", { method: "POST", body: { code: adminSession.code, key: adminSession.adminKey } });
-      toast(`Recordatorio enviado a ${r.reminded} persona${r.reminded === 1 ? "" : "s"} 🔔`);
+      toast(`Recordatorio enviado a ${r.reminded} persona${r.reminded === 1 ? "" : "s"}`);
     } catch (err) { toast(err.message); }
     b.disabled = false;
   });
@@ -727,8 +727,8 @@ function renderAdmin(data) {
       (p) => `
       <tr>
         <td><strong>${escapeHtml(p.name)}</strong></td>
-        <td>${p.survey.repeat.length ? `🙌 ${p.survey.repeat.join(" · ")}` : "—"}</td>
-        <td>${p.survey.remove.length ? `🚫 ${p.survey.remove.join(" · ")}` : "—"}</td>
+        <td>${p.survey.repeat.length ? `${p.survey.repeat.join(" · ")}` : "—"}</td>
+        <td>${p.survey.remove.length ? `${p.survey.remove.join(" · ")}` : "—"}</td>
         <td>${p.survey.ideas || "—"}</td>
       </tr>`
     )
@@ -736,7 +736,7 @@ function renderAdmin(data) {
   $("#surveys-table").innerHTML = `<table><tr><th>Empleado</th><th>Que se repitan</th><th>Que dejen de estar</th><th>Nuevos</th></tr>${surveyRows || '<tr><td colspan="4" class="muted">Sin respuestas todavía.</td></tr>'}</table>`;
 
   $("#copy-summary").onclick = () => {
-    const lines = [`🥘 Como en Casa · ${data.company.name}`, `Semana del ${data.week.days[0].iso} al ${data.week.days[5].iso} (${data.week.cycle === "A" ? "Semana 1" : "Semana 2"} del ciclo)`, ""];
+    const lines = [`Como en Casa · ${data.company.name}`, `Semana del ${data.week.days[0].iso} al ${data.week.days[5].iso} (${data.week.cycle === "A" ? "Semana 1" : "Semana 2"} del ciclo)`, ""];
     for (const day of data.week.days) {
       const c = data.counts[day.key];
       const parts = data.menus.filter((m) => c[m.id]).map((m) => `${c[m.id]} ${m.name}`);
@@ -745,7 +745,7 @@ function renderAdmin(data) {
       lines.push(`${DAY_LABELS[day.key]}: ${parts.length ? parts.join(" · ") : "sin pedidos"} (total ${total})`);
     }
     navigator.clipboard.writeText(lines.join("\n"));
-    toast("Resumen copiado 📋");
+    toast("Resumen copiado");
   };
 }
 
@@ -797,7 +797,7 @@ $("#add-employee-form")?.addEventListener("submit", async (e) => {
       method: "POST",
       body: { code: adminSession.code, key: adminSession.adminKey, name: form.get("name") },
     });
-    toast("Persona agregada ✅");
+    toast("Persona agregada");
     e.target.reset();
     await loadAdmin();
   } catch (err) {
@@ -839,7 +839,7 @@ $("#admin-login-form")?.addEventListener("submit", async (e) => {
 
 $("#copy-code")?.addEventListener("click", () => {
   navigator.clipboard.writeText($("#admin-code").textContent);
-  toast("Código copiado 📋");
+  toast("Código copiado");
 });
 
 $("#admin-link")?.addEventListener("click", openAdmin);
