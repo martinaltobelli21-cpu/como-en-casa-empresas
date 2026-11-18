@@ -11,8 +11,8 @@
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/styles.css?v=3" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css?v=4" />
 </head>
 <body>
   <header class="topbar">
@@ -28,7 +28,7 @@
   <div id="saturday-banner" class="saturday-banner hidden">
     <div class="saturday-inner">
       <div>
-        <strong>EY, ES HORA DE ORGANIZAR TU PRÓXIMA SEMANA 👀</strong>
+        <strong>Es hora de organizar tu próxima semana</strong>
         <span id="saturday-sub">Elegí tus viandas en 1 minuto. Último día: cerramos a las 14:00.</span>
       </div>
       <a href="#semana" class="btn btn-light btn-sm">Elegir ahora</a>
@@ -52,7 +52,7 @@
           <label>Código de la empresa
             <input name="code" placeholder="Ej: K7M2XA" autocomplete="organization" required maxlength="6" style="text-transform:uppercase" />
           </label>
-          <button class="btn btn-primary btn-block" type="submit">Continuar 🥘</button>
+          <button class="btn btn-primary btn-block" type="submit">Continuar</button>
           <p id="join-error" class="error hidden"></p>
         </form>
         <button class="link-btn" type="button" data-install-guide>Cómo instalar la app en tu celular</button>
@@ -135,21 +135,21 @@
 
       <div id="week-editor">
         <div class="section-head">
-          <h2 id="semana" class="section-title">Tu semana 📅</h2>
+          <h2 id="semana" class="section-title">Tu semana</h2>
           <span id="dirty-flag" class="dirty-flag hidden">Cambios sin enviar</span>
         </div>
         <div class="quick-fill">
           <span class="muted">Completar todo con:</span>
-          <button type="button" class="chip quick" data-fill="potente">🍖 Potente</button>
-          <button type="button" class="chip quick" data-fill="equilibrado">🥘 Equilibrado</button>
-          <button type="button" class="chip quick" data-fill="light">🌿 Light</button>
+          <button type="button" class="chip quick" data-fill="potente">Potente</button>
+          <button type="button" class="chip quick" data-fill="equilibrado">Equilibrado</button>
+          <button type="button" class="chip quick" data-fill="light">Light</button>
           <button type="button" class="chip quick quick-clear" data-fill="">Borrar</button>
         </div>
         <div id="week-grid" class="week-grid"></div>
       </div>
 
       <div class="card settings-card">
-        <strong>🔔 Notificaciones activadas</strong>
+        <strong>Notificaciones activadas</strong>
         <p class="muted small">Te avisamos cuando abre la elección y antes del cierre. Al enviar tu pedido te llega un mail con el resumen.</p>
         <button id="demo-btn" class="btn btn-outline btn-sm hidden" type="button">Enviar notificación de prueba</button>
         <button class="link-btn" type="button" data-install-guide>Cómo instalar la app en tu celular</button>
@@ -157,12 +157,12 @@
       </div>
 
       <section id="survey-section" class="hidden">
-        <h2 class="section-title">Encuesta rápida 📋</h2>
+        <h2 class="section-title">Encuesta rápida</h2>
         <div class="card">
           <p class="muted" style="margin-top:0">Contanos qué te parecieron las viandas de la semana.</p>
-          <p class="survey-q">🙌 ¿Qué platos te gustaría que se repitan más? <span class="muted">(podés elegir varios)</span></p>
+          <p class="survey-q">¿Qué platos te gustaría que se repitan más? <span class="muted">(podés elegir varios)</span></p>
           <div id="survey-repeat" class="day-chips"></div>
-          <p class="survey-q">🚫 ¿Qué platos te gustaría que dejen de estar? <span class="muted">(podés elegir varios)</span></p>
+          <p class="survey-q">¿Qué platos te gustaría que dejen de estar? <span class="muted">(podés elegir varios)</span></p>
           <div id="survey-remove" class="day-chips"></div>
           <p class="survey-q">✨ ¿Qué platos nuevos sumarías?</p>
           <textarea id="survey-ideas" rows="2" placeholder="Ej: más pastas, algo vegetariano, menos pescado…"></textarea>
@@ -170,7 +170,7 @@
         </div>
       </section>
 
-      <p class="footer-note">Hecho en casa, con cariño 🏠 · Como en Casa · Empresas</p>
+      <p class="footer-note">Hecho en casa, con cariño · Como en Casa · Empresas</p>
     </section>
 
     <!-- Vista: admin -->
@@ -214,7 +214,7 @@
           <button id="copy-code" class="btn btn-outline btn-sm" type="button">Copiar</button>
         </div>
         <div class="card">
-          <h2>Sumar gente 👥</h2>
+          <h2>Sumar gente</h2>
           <p class="muted" style="margin-top:0">Cada persona carga su correo y crea su PIN de 4 dígitos en el primer ingreso.</p>
           <form id="import-employees-form">
             <label>Nombres (uno por renglón)
@@ -231,11 +231,11 @@
             <button class="btn btn-outline btn-block" type="submit">Agregar a la lista</button>
           </form>
         </div>
-        <h2 class="section-title">Viandas por día 🍱</h2>
+        <h2 class="section-title">Viandas por día</h2>
         <div class="card table-card" id="counts-table"></div>
-        <h2 class="section-title">Tu gente 👥</h2>
+        <h2 class="section-title">Tu gente</h2>
         <div class="card table-card" id="people-table"></div>
-        <h2 class="section-title">Encuesta de la semana pasada 📋</h2>
+        <h2 class="section-title">Encuesta de la semana pasada</h2>
         <div class="card table-card" id="surveys-table"></div>
         <button id="copy-summary" class="btn btn-primary btn-block" type="button">Copiar resumen para WhatsApp</button>
       </div>
