@@ -525,6 +525,38 @@ $("#demo-btn")?.addEventListener("click", async () => {
   btn.disabled = false;
 });
 
+/* ---------- Marca de la empresa (recién después del código) ---------- */
+
+const COMPANY_LOGOS = {
+  kalis: "/icons/kalis-logo.svg",
+};
+
+function applyCompanyBranding(name) {
+  const company = String(name || "").trim();
+  const key = company.toLowerCase().replace(/\s+/g, " ");
+  const logo = COMPANY_LOGOS[key] || null;
+  const img = $("#login-company-logo");
+  const sep = $("#login-logo-sep");
+  if (img && sep) {
+    if (logo) {
+      img.src = logo;
+      img.alt = company;
+      img.classList.remove("hidden");
+      sep.classList.remove("hidden");
+    } else {
+      img.src = "";
+      img.alt = "";
+      img.classList.add("hidden");
+      sep.classList.add("hidden");
+    }
+  }
+  const title = $("#login-hero-title");
+  if (title) title.textContent = company ? `Comida casera para ${company}` : "Ingresá";
+  const sub = $("#login-company");
+  if (sub) sub.textContent = "Elegí tus viandas para la semana.";
+  document.title = company ? `Como en Casa · ${company}` : "Como en Casa · Empresas";
+}
+
 /* ---------- Login con roster + PIN ---------- */
 
 let roster = null;
@@ -541,7 +573,7 @@ $("#join-form")?.addEventListener("submit", async (e) => {
     select.innerHTML = roster.people
       .map((p) => `<option value="${p.id}">${escapeHtml(p.name)}${p.hasPin ? "" : " · primer ingreso"}</option>`)
       .join("");
-    $("#login-company").textContent = `Empresa: ${roster.company}`;
+    applyCompanyBranding(roster.company);
     updatePinMode();
     show("login");
   } catch (err) {
