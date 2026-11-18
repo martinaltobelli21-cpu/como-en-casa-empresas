@@ -21,6 +21,7 @@
       <span class="badge">Empresas</span>
       <span id="user-chip" class="user-chip hidden" aria-hidden="true"></span>
       <button id="admin-link" class="link-btn" type="button">Admin</button>
+      <button id="logout-btn" class="link-btn hidden" type="button">Salir</button>
     </div>
   </header>
 
@@ -262,5 +263,30 @@
   <div id="toast" class="toast hidden"></div>
 
   <script src="/js/app.js?v=3"></script>
+  <script>
+    (function () {
+      var btn = document.getElementById("logout-btn");
+      var chip = document.getElementById("user-chip");
+      var adminPanel = document.getElementById("admin-panel");
+      if (!btn) return;
+      function sync() {
+        var logged =
+          (chip && !chip.classList.contains("hidden")) ||
+          (adminPanel && !adminPanel.classList.contains("hidden"));
+        btn.classList.toggle("hidden", !logged);
+      }
+      [chip, adminPanel].forEach(function (el) {
+        if (el) new MutationObserver(sync).observe(el, { attributes: true, attributeFilter: ["class"] });
+      });
+      btn.addEventListener("click", function () {
+        if (!confirm("¿Cerrar sesión?")) return;
+        Object.keys(localStorage)
+          .filter(function (k) { return k.indexOf("cec_") === 0; })
+          .forEach(function (k) { localStorage.removeItem(k); });
+        location.replace(location.pathname);
+      });
+      sync();
+    })();
+  </script>
 </body>
 </html>
